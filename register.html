@@ -8,7 +8,17 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="css/login.css">
     <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
-    <script type="importmap"> { "imports": { "firebase/app": "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js", "firebase/auth": "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js" } } </script>
+    
+    <script type="importmap">
+      {
+        "imports": {
+          "firebase/app": "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js",
+          "firebase/auth": "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js",
+          "firebase/firestore": "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js",
+          "firebase/storage": "https://www.gstatic.com/firebasejs/10.13.0/firebase-storage.js"
+        }
+      }
+    </script>
 </head>
 <body>
     <i class="fas fa-adjust theme-toggle-login" onclick="toggleThemeLogin()" title="Alterar Tema"></i>
@@ -21,12 +31,12 @@
             <form id="registerForm">
                 <div class="input-group"><label>Nome Completo</label><input type="text" id="reg-nome" required></div>
                 <div class="input-group"><label>E-mail</label><input type="email" id="reg-email" required></div>
-                <div class="input-group"><label>Senha</label><input type="password" id="reg-password" placeholder="Min 6 chars" required></div>
+                <div class="input-group"><label>Senha</label><input type="password" id="reg-password" placeholder="Min 6 caracteres" required></div>
                 <div class="input-group"><label>Confirmar Senha</label><input type="password" id="reg-confirm" required></div>
                 <button type="submit">Cadastrar</button>
             </form>
             
-            <div style="margin-top: 25px; padding-top: 20px; border-top: 1px solid var(--border);">
+            <div style="margin-top: 25px; padding-top: 20px; border-top: 1px solid #eee;">
                 <p class="switch-page">Já tem conta? <a href="login.html">Faça Login</a></p>
             </div>
         </div>

@@ -8,7 +8,16 @@
     <link rel="stylesheet" href="css/login.css">
     <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
     
-    <script type="importmap"> { "imports": { "firebase/app": "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js", "firebase/auth": "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js" } } </script>
+    <script type="importmap">
+      {
+        "imports": {
+          "firebase/app": "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js",
+          "firebase/auth": "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js",
+          "firebase/firestore": "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js",
+          "firebase/storage": "https://www.gstatic.com/firebasejs/10.13.0/firebase-storage.js"
+        }
+      }
+    </script>
 </head>
 <body>
     <i class="fas fa-adjust theme-toggle-login" onclick="toggleThemeLogin()" title="Alterar Tema"></i>
@@ -32,7 +41,7 @@
             
             <p style="margin-top: 15px; font-size: 13px;">Esqueceu a senha? <a href="#" onclick="recuperarSenha()">Recuperar</a></p>
             
-            <div style="margin-top: 25px; padding-top: 20px; border-top: 1px solid var(--border);">
+            <div style="margin-top: 25px; padding-top: 20px; border-top: 1px solid #eee;">
                 <p class="switch-page">Não tem uma conta? <a href="register.html">Cadastre-se</a></p>
             </div>
             
