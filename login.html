@@ -3,18 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - L&ston</title>
+    <title>Login - L&stON</title>
     <link rel="stylesheet" href="css/login.css">
-    
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
     <script type="importmap">
-      {
-        "imports": {
-          "firebase/app": "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js",
-          "firebase/auth": "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js",
-          "firebase/firestore": "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js",
-          "firebase/storage": "https://www.gstatic.com/firebasejs/10.13.0/firebase-storage.js"
-        }
-      }
+      { "imports": { "firebase/app": "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js", "firebase/auth": "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js" } }
     </script>
 </head>
 <body>
@@ -27,15 +20,11 @@
                 <button type="submit">Entrar</button>
             </form>
             <p style="margin-top: 15px; font-size: 14px;">Esqueceu a senha? <a href="#" style="color:#2c3e50; font-weight:bold;">Recuperar</a></p>
-            
-            <div class="admin-hint">
-                <p><b>Acesso:</b> Use o usuário criado no Firebase (ex: admin@lston.com).</p>
-            </div>
-            <br>
-            <a href="index.html" style="font-size: 12px; color: #888;">Voltar para a Loja</a>
+            <div class="admin-hint"><p><b>Acesso:</b> Use seu usuário Firebase.</p></div>
+            <br><a href="index.html" style="font-size: 12px; color: #888;">Voltar para a Loja</a>
         </div>
     </div>
-    
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
     <script type="module" src="js/login.js"></script>
 </body>
 </html>

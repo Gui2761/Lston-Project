@@ -4,7 +4,7 @@ body { background-color: #fff; color: #333; }
 a { text-decoration: none; color: inherit; }
 
 /* HEADER */
-header { display: flex; justify-content: space-between; align-items: center; padding: 15px 40px; border-bottom: 2px solid #333; }
+header { display: flex; justify-content: space-between; align-items: center; padding: 15px 40px; border-bottom: 2px solid #333; position: relative; z-index: 100; background: #fff; }
 .logo { font-size: 24px; font-weight: bold; color: #2c3e50; }
 .logo span { color: #8bc34a; }
 .search-bar { flex: 1; margin: 0 40px; position: relative; max-width: 600px; }
@@ -12,82 +12,57 @@ header { display: flex; justify-content: space-between; align-items: center; pad
 .search-bar i { position: absolute; right: 15px; top: 50%; transform: translateY(-50%); cursor: pointer; }
 .user-actions { display: flex; gap: 20px; font-size: 18px; align-items: center; }
 
-/* --- PÁGINA DE PRODUTO (LAYOUT "BIG TECH") --- */
+/* --- TELA DE LOADING (NOVO) --- */
+#loading-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(255, 255, 255, 0.85); z-index: 9999;
+    display: none; justify-content: center; align-items: center; flex-direction: column;
+}
+.spinner {
+    width: 50px; height: 50px; border: 5px solid #eee;
+    border-top: 5px solid #2c3e50; border-radius: 50%;
+    animation: spin 1s linear infinite; margin-bottom: 15px;
+}
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+/* --- PÁGINA DE PRODUTO --- */
 .product-page-container { max-width: 1200px; margin: 0 auto; padding: 40px 20px; }
-
-/* Título */
 .prod-title-big { font-size: 32px; color: #333; margin-bottom: 20px; font-weight: normal; }
-
-/* Grid Principal */
 .product-layout { display: flex; gap: 40px; align-items: flex-start; }
 
 /* Galeria */
 .gallery-wrapper { display: flex; gap: 15px; flex: 1.5; }
-
-/* Coluna de Miniaturas (Esquerda) */
 .thumbnails-col { display: flex; flex-direction: column; gap: 10px; }
-.thumb-box { 
-    width: 80px; height: 80px; background-color: #f4f4f4; 
-    cursor: pointer; border: 2px solid transparent; 
-    display: flex; justify-content: center; align-items: center;
-}
+.thumb-box { width: 80px; height: 80px; background-color: #f4f4f4; cursor: pointer; border: 2px solid transparent; display: flex; justify-content: center; align-items: center; }
 .thumb-box:hover, .thumb-box.active { border-color: #2c3e50; }
 .thumb-box img { max-width: 100%; max-height: 100%; object-fit: contain; }
-
-/* Imagem Grande (Centro) */
-.main-image-box { 
-    flex: 1; background-color: #f4f4f4; height: 500px; 
-    display: flex; justify-content: center; align-items: center; 
-    border-radius: 4px; border: 1px solid #eee; overflow: hidden;
-}
+.main-image-box { flex: 1; background-color: #f4f4f4; height: 500px; display: flex; justify-content: center; align-items: center; border-radius: 4px; border: 1px solid #eee; overflow: hidden; }
 .main-image-box img { max-width: 95%; max-height: 95%; object-fit: contain; }
 
-/* Coluna Direita (Detalhes) - CORREÇÃO DE TEXTO VAZANDO */
-.details-col { 
-    flex: 1; 
-    display: flex; 
-    flex-direction: column; 
-    gap: 20px; 
-    min-width: 0; /* Impede overflow em flex items */
-}
-
+/* Detalhes */
+.details-col { flex: 1; display: flex; flex-direction: column; gap: 20px; min-width: 0; }
 .prod-desc-box { 
-    font-size: 16px; 
-    color: #555; 
-    line-height: 1.6; 
-    background: #fafafa; 
-    padding: 20px; 
-    border-radius: 8px; 
-    
-    /* Força a quebra de palavras longas */
-    word-wrap: break-word;
-    overflow-wrap: break-word;
-    word-break: break-word;
-    
-    /* Respeita parágrafos (Enter) */
-    white-space: pre-wrap; 
+    font-size: 16px; color: #555; line-height: 1.6; background: #fafafa; 
+    padding: 20px; border-radius: 8px; 
+    word-wrap: break-word; word-break: break-word; white-space: pre-wrap;
 }
-
 .prod-price-big { font-size: 42px; color: #333; font-weight: bold; }
 
-.btn-buy-big {
-    background-color: #2c3e50; color: white; border: none; padding: 20px; 
-    font-size: 18px; font-weight: bold; cursor: pointer; border-radius: 4px; width: 100%;
-}
+.btn-buy-big { background-color: #2c3e50; color: white; border: none; padding: 20px; font-size: 18px; font-weight: bold; cursor: pointer; border-radius: 4px; width: 100%; transition: 0.3s; }
 .btn-buy-big:hover { background-color: #8bc34a; }
 
-/* Responsividade */
-@media (max-width: 768px) {
-    .product-layout { flex-direction: column; }
-    .gallery-wrapper { flex-direction: column-reverse; width: 100%; }
-    .thumbnails-col { flex-direction: row; justify-content: center; margin-top: 10px; }
-    .main-image-box { height: 300px; }
+/* BOTÃO WHATSAPP (NOVO) */
+.btn-whatsapp {
+    background-color: #25D366; color: white; border: none; padding: 15px; 
+    font-size: 16px; font-weight: bold; cursor: pointer; border-radius: 4px; 
+    width: 100%; margin-top: 10px; display: flex; align-items: center; 
+    justify-content: center; gap: 10px; transition: 0.3s;
 }
+.btn-whatsapp:hover { background-color: #128C7E; }
 
-/* --- OUTROS ESTILOS (Cards Home, Carrinho) --- */
+/* --- OUTROS --- */
 .carousel-section { display: flex; justify-content: center; margin: 40px 0; }
 .carousel-box { width: 80%; height: 200px; border: 1px solid #333; display: flex; justify-content: center; align-items: center; background-color: #f9f9f9; }
-
 .categories-section { display: flex; justify-content: center; gap: 30px; margin-bottom: 50px; flex-wrap: wrap; }
 .category-item { text-align: center; display: flex; flex-direction: column; align-items: center; cursor: pointer; }
 .circle { width: 80px; height: 80px; background-color: #f0f0f0; border: 2px solid #ddd; border-radius: 50%; margin-bottom: 10px; display: flex; justify-content: center; align-items: center; font-size: 30px; color: #555; transition: 0.3s; }
@@ -106,3 +81,5 @@ header { display: flex; justify-content: space-between; align-items: center; pad
 .cart-items { flex: 1; overflow-y: auto; }
 .cart-item { display: flex; justify-content: space-between; margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
 .cart-footer { padding-top: 20px; border-top: 1px solid #ddd; }
+
+@media (max-width: 768px) { .product-layout { flex-direction: column; } .gallery-wrapper { flex-direction: column-reverse; width: 100%; } .thumbnails-col { flex-direction: row; justify-content: center; margin-top: 10px; } .main-image-box { height: 300px; } }

@@ -3,15 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>L&ston - Painel Admin</title>
+    <title>L&ston - Admin</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="css/admin.css">
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+    
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script type="importmap">
       { "imports": { "firebase/app": "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js", "firebase/auth": "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js", "firebase/firestore": "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js", "firebase/storage": "https://www.gstatic.com/firebasejs/10.13.0/firebase-storage.js" } }
     </script>
 </head>
 <body>
+    <div id="loading-overlay"><div class="spinner"></div><p style="margin-top:10px;">Processando...</p></div>
 
     <nav class="sidebar">
         <h2>L&st<span>ON</span> Admin</h2>
@@ -27,8 +30,8 @@
         <div id="section-dashboard">
             <div class="kpi-container">
                 <div class="kpi-card"><h3>FATURAMENTO</h3><div class="value" id="kpi-faturamento">R$ 0,00</div></div>
-                <div class="kpi-card blue-border"><h3>VENDAS TOTAIS</h3><div class="value" id="kpi-vendas">0</div></div>
-                <div class="kpi-card red-border"><h3>ESTOQUE TOTAL</h3><div class="value" id="total-estoque-count">0</div></div>
+                <div class="kpi-card blue-border"><h3>VENDAS</h3><div class="value" id="kpi-vendas">0</div></div>
+                <div class="kpi-card red-border"><h3>ESTOQUE</h3><div class="value" id="total-estoque-count">0</div></div>
             </div>
             <div style="display: flex; gap: 20px; flex-wrap: wrap;">
                 <div class="product-section" style="flex: 1; min-width: 300px;"><h3>Vendas por Categoria</h3><canvas id="graficoCategorias"></canvas></div>
@@ -42,7 +45,16 @@
         </div>
 
         <div id="section-pedidos" class="product-section" style="display: none;">
-            <div class="section-header"><h2>Pedidos Recebidos</h2></div>
+            <div class="section-header">
+                <h2>Pedidos Recebidos</h2>
+                <select id="filtro-status" style="padding: 5px; border-radius: 5px;">
+                    <option value="Todos">Todos os Status</option>
+                    <option value="Recebido">Recebidos</option>
+                    <option value="Preparando">Preparando</option>
+                    <option value="Enviado">Enviados</option>
+                    <option value="Entregue">Entregues</option>
+                </select>
+            </div>
             <table><thead><tr><th>Data</th><th>Cliente</th><th>Total</th><th>Status</th><th>Detalhes</th></tr></thead><tbody id="tabela-pedidos"></tbody></table>
         </div>
     </main>
@@ -51,39 +63,24 @@
         <div class="modal-content" style="max-height: 90vh; overflow-y: auto;">
             <h3 id="modal-titulo">Novo Produto</h3>
             <input type="hidden" id="prod-id">
-            
             <label>Nome:</label><input type="text" id="prod-nome">
-            
             <div style="display: flex; gap: 10px;">
                 <div style="flex:1;"><label>Preço:</label><input type="number" id="prod-preco"></div>
                 <div style="flex:1;"><label>Qtd:</label><input type="number" id="prod-estoque"></div>
             </div>
-            
             <label>Categoria:</label>
-            <select id="prod-cat" style="padding:10px; margin:5px 0 10px 0; width:100%; border:1px solid #ddd; border-radius:5px;">
+            <select id="prod-cat" style="padding:10px; margin:5px 0; width:100%; border:1px solid #ddd; border-radius:5px;">
                 <option value="Geral">Selecionar...</option><option value="Roupas">Roupas</option><option value="Calçados">Calçados</option><option value="Tecnologia">Tecnologia</option><option value="Esportes">Esportes</option>
             </select>
-
-            <label>Descrição:</label>
-            <textarea id="prod-desc" rows="3" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:5px; resize:none;"></textarea>
-            
+            <label>Descrição:</label><textarea id="prod-desc" rows="3" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:5px; resize:none;"></textarea>
             <div style="background: #f4f4f4; padding: 15px; border-radius: 8px; margin-top: 15px;">
-                <p style="font-weight: bold; margin-bottom: 10px;">Galeria de Fotos (Selecione até 4):</p>
-                
-                <label style="font-size: 12px;">Foto Principal (Capa):</label>
-                <input type="file" id="img-1" accept="image/*" style="margin-bottom: 8px;">
-                
-                <label style="font-size: 12px;">Foto 2:</label>
-                <input type="file" id="img-2" accept="image/*" style="margin-bottom: 8px;">
-                
-                <label style="font-size: 12px;">Foto 3:</label>
-                <input type="file" id="img-3" accept="image/*" style="margin-bottom: 8px;">
-                
-                <label style="font-size: 12px;">Foto 4:</label>
+                <p style="font-weight: bold; margin-bottom: 10px;">Galeria (Até 4):</p>
+                <input type="file" id="img-1" accept="image/*" style="margin-bottom: 8px;"><br>
+                <input type="file" id="img-2" accept="image/*" style="margin-bottom: 8px;"><br>
+                <input type="file" id="img-3" accept="image/*" style="margin-bottom: 8px;"><br>
                 <input type="file" id="img-4" accept="image/*">
             </div>
-            
-            <div class="modal-buttons"><button id="btn-save-prod" class="btn-save">Salvar Produto</button><button onclick="fecharModal()" class="btn-cancel">Cancelar</button></div>
+            <div class="modal-buttons"><button id="btn-save-prod" class="btn-save">Salvar</button><button onclick="fecharModal()" class="btn-cancel">Cancelar</button></div>
         </div>
     </div>
 
@@ -95,6 +92,7 @@
         </div>
     </div>
 
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
     <script type="module" src="js/admin.js"></script>
 </body>
 </html>
