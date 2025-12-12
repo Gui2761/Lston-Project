@@ -2,16 +2,25 @@ import { db, auth } from "./firebaseConfig.js";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 
-// Tema persistente
+// --- TEMA ---
 const savedTheme = localStorage.getItem('lston_theme') || 'light';
 document.body.setAttribute('data-theme', savedTheme);
+if(document.getElementById('theme-toggle')) document.getElementById('theme-toggle').className = savedTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+
+window.toggleTheme = () => {
+    const body = document.body;
+    const newTheme = body.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    body.setAttribute('data-theme', newTheme);
+    localStorage.setItem('lston_theme', newTheme);
+    document.getElementById('theme-toggle').className = newTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+}
 
 const pedidosList = document.getElementById('lista-meus-pedidos');
 function fmtMoney(val) { return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val); }
 
 onAuthStateChanged(auth, async (user) => {
     if (!user) { window.location.href = "login.html"; return; }
-    document.getElementById('user-email-display').innerText = user.email;
+    document.getElementById('user-email-display').innerText = user.displayName || user.email;
     carregarPedidos(user.email);
 });
 
@@ -21,28 +30,36 @@ async function carregarPedidos(email) {
         const querySnapshot = await getDocs(q);
 
         pedidosList.innerHTML = '';
-        if (querySnapshot.empty) { pedidosList.innerHTML = '<p style="color:var(--text-muted)">Nenhum pedido encontrado.</p>'; return; }
+        if (querySnapshot.empty) { 
+            pedidosList.innerHTML = '<p style="color:var(--text-muted)">Você ainda não fez nenhum pedido.</p>'; 
+            return; 
+        }
 
         querySnapshot.forEach((doc) => {
             const p = doc.data();
             const data = new Date(p.data).toLocaleDateString('pt-BR');
             let itensHtml = '';
             p.itens.forEach(item => {
-                itensHtml += `<div style="display:flex; gap:10px; margin-bottom:5px; align-items:center; color:var(--text-color);">
-                    <img src="${item.img}" style="width:40px; height:40px; object-fit:cover; border-radius:4px;">
-                    <span style="font-size:14px;">${item.nome}</span>
-                </div>`;
+                itensHtml += `
+                    <div class="order-item">
+                        <img src="${item.img}" style="width:50px; height:50px; object-fit:cover; border-radius:6px; border:1px solid var(--border-color);">
+                        <div>
+                            <div style="font-weight:600;">${item.nome}</div>
+                            <div style="font-size:12px; color:var(--text-muted);">${item.qtd}x ${fmtMoney(item.preco)}</div>
+                        </div>
+                    </div>`;
             });
 
+            // Aplica a classe CSS do perfil.css
             const card = document.createElement('div');
-            card.style = "background: var(--card-bg); border: 1px solid var(--border-color); padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);";
+            card.className = "order-card"; 
             card.innerHTML = `
-                <div style="display:flex; justify-content:space-between; border-bottom:1px solid var(--border-color); padding-bottom:10px; margin-bottom:10px; color:var(--text-color);">
-                    <strong>Data: ${data}</strong>
+                <div class="order-header">
+                    <span><strong>Data:</strong> ${data}</span>
                     <span class="status-badge status-${p.status.toLowerCase()}">${p.status}</span>
                 </div>
-                <div style="margin-bottom:10px;">${itensHtml}</div>
-                <div style="text-align:right; font-weight:bold; color:var(--accent-color);">Total: ${fmtMoney(p.total)}</div>
+                <div>${itensHtml}</div>
+                <div class="order-total">Total: ${fmtMoney(p.total)}</div>
             `;
             pedidosList.appendChild(card);
         });

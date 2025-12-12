@@ -5,8 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Minha Conta | L&stON</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link rel="stylesheet" href="css/style.css">
-    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+    
+    <link rel="stylesheet" href="css/global.css">
+    <link rel="stylesheet" href="css/perfil.css">
+
     <script type="importmap"> { "imports": { "firebase/app": "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js", "firebase/auth": "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js", "firebase/firestore": "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js", "firebase/storage": "https://www.gstatic.com/firebasejs/10.13.0/firebase-storage.js" } } </script>
 </head>
 <body>
@@ -15,23 +17,23 @@
         <div class="nav-menu"><a href="index.html">Voltar para Loja</a></div>
         <div class="user-actions">
             <i class="fas fa-moon" id="theme-toggle" onclick="toggleTheme()" style="cursor:pointer;"></i>
-            <button id="btn-logout-client" style="background:none; border:none; color:red; cursor:pointer; font-size:16px;">Sair</button>
+            <button id="btn-logout-client" style="background:none; border:none; color:#e74c3c; cursor:pointer; font-size:16px; font-weight:bold;">Sair</button>
         </div>
     </header>
 
     <main class="product-page-container">
         <h2 class="prod-title-big">Minha Conta</h2>
-        <div style="background: var(--bg-secondary); padding: 20px; border-radius: 8px; margin-bottom: 30px; border: 1px solid var(--border-color);">
-            <p style="color:var(--text-color)">Olá, <strong id="user-email-display">Carregando...</strong></p>
+        
+        <div class="welcome-card">
+            <p>Bem-vindo, <strong id="user-email-display">...</strong></p>
         </div>
 
-        <h3 style="color:var(--text-color)">Meus Pedidos</h3>
-        <div id="lista-meus-pedidos" style="margin-top: 20px;">
-            <p style="color:var(--text-muted)">Buscando seus pedidos...</p>
+        <h3 style="color:var(--text-color); margin-bottom:15px;">Histórico de Pedidos</h3>
+        <div id="lista-meus-pedidos">
+            <p style="color:var(--text-muted);">Carregando pedidos...</p>
         </div>
     </main>
 
-    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
     <script type="module" src="js/perfil.js"></script>
 </body>
 </html>

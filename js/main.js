@@ -2,27 +2,6 @@ import { db, auth } from "./firebaseConfig.js";
 import { collection, getDocs, addDoc, doc, updateDoc, query, where } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 
-// --- LÓGICA DE TEMA (PERSISTÊNCIA) ---
-// Executa imediatamente ao carregar o arquivo
-const savedTheme = localStorage.getItem('lston_theme') || 'light';
-document.body.setAttribute('data-theme', savedTheme);
-// Atualiza o ícone se ele existir
-const themeIcon = document.getElementById('theme-toggle');
-if(themeIcon) themeIcon.className = savedTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
-
-window.toggleTheme = () => {
-    const body = document.body;
-    const currentTheme = body.getAttribute('data-theme');
-    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-    
-    body.setAttribute('data-theme', newTheme);
-    localStorage.setItem('lston_theme', newTheme); // Salva na memória
-    
-    const icon = document.getElementById('theme-toggle');
-    if(icon) icon.className = newTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
-}
-
-// --- VARIÁVEIS GLOBAIS ---
 let carrinho = JSON.parse(localStorage.getItem('lston_carrinho')) || []; 
 let favoritos = JSON.parse(localStorage.getItem('lston_favoritos')) || [];
 let todosProdutos = []; 
@@ -31,26 +10,32 @@ let currentUserEmail = null;
 const container = document.getElementById('products-container');
 
 // --- HELPERS ---
-window.showToast = (msg, type='success') => { 
-    if(typeof Toastify !== 'undefined') {
-        Toastify({ text: msg, duration: 3000, style: { background: type==='error'?"#e74c3c":"#2c3e50" } }).showToast(); 
-    } else {
-        alert(msg); // Fallback caso Toastify falhe
-    }
-}
+window.showToast = (msg, type='success') => { if(typeof Toastify !== 'undefined') Toastify({ text: msg, duration: 3000, style: { background: type==='error'?"#e74c3c":"#2c3e50" } }).showToast(); else alert(msg); }
 window.fmtMoney = (val) => { return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val); }
 window.toggleLoading = (show) => { const el = document.getElementById('loading-overlay'); if(el) el.style.display = show ? 'flex' : 'none'; }
 window.mascaraCep = (el) => { el.value = el.value.replace(/\D/g, "").replace(/^(\d{5})(\d)/, "$1-$2"); };
 window.toggleMenu = () => { document.getElementById('nav-menu').classList.toggle('active'); }
 
+// --- TEMA ---
+const savedTheme = localStorage.getItem('lston_theme') || 'light';
+document.body.setAttribute('data-theme', savedTheme);
+if(document.getElementById('theme-toggle')) document.getElementById('theme-toggle').className = savedTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+
+window.toggleTheme = () => {
+    const body = document.body;
+    const currentTheme = body.getAttribute('data-theme');
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    body.setAttribute('data-theme', newTheme);
+    localStorage.setItem('lston_theme', newTheme);
+    document.getElementById('theme-toggle').className = newTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+}
+
 // --- AUTH ---
 onAuthStateChanged(auth, (user) => {
-    const userDisplay = document.getElementById('user-name');
     if (user) {
         currentUserEmail = user.email;
+        const userDisplay = document.getElementById('user-name');
         if(userDisplay) userDisplay.innerText = user.email.split('@')[0];
-    } else {
-        if(userDisplay) userDisplay.innerText = "Entrar";
     }
 });
 
@@ -59,37 +44,30 @@ let slideIndex = 0;
 async function carregarBanners() {
     try {
         const q = await getDocs(collection(db, "banners"));
-        const sliderContainer = document.getElementById('slider');
+        const c = document.getElementById('slider');
         if (q.empty) return; 
-        let html = '';
-        q.forEach(d => {
-            const b = d.data();
-            html += `<div class="slide" style="background-image: url('${b.img}');"><div class="slide-content"><h2>${b.titulo}</h2><p>${b.subtitulo}</p></div></div>`;
-        });
-        sliderContainer.innerHTML = html;
-        iniciarSlider();
-    } catch (e) { console.error(e); }
+        let h=''; 
+        q.forEach(d=>{const b=d.data(); h+=`<div class="slide" style="background-image: url('${b.img}');"><div class="slide-content"><h2>${b.titulo}</h2><p>${b.subtitulo}</p></div></div>`;}); 
+        c.innerHTML=h; 
+        setInterval(()=>{slideIndex=(slideIndex+1)%q.size;c.style.transform=`translateX(-${slideIndex*100}%)`},5000); 
+    } catch(e){} 
 }
-function iniciarSlider() {
-    const slides = document.querySelectorAll('.slide');
-    if(slides.length < 2) return;
-    setInterval(() => { slideIndex = (slideIndex + 1) % slides.length; atualizarSlider(); }, 5000);
-}
-function atualizarSlider() { document.getElementById('slider').style.transform = `translateX(-${slideIndex * 100}%)`; }
-window.mudarSlide = (n) => {
-    const slides = document.querySelectorAll('.slide');
-    slideIndex = (slideIndex + n + slides.length) % slides.length;
-    atualizarSlider();
+window.mudarSlide = (n) => { 
+    const s = document.querySelectorAll('.slide'); 
+    if(s.length) {
+        slideIndex = (slideIndex + n + s.length) % s.length; 
+        document.getElementById('slider').style.transform = `translateX(-${slideIndex * 100}%)`; 
+    }
 }
 
-// --- PRODUTOS ---
+// --- LOJA ---
 async function carregarLoja() {
     if(container) container.innerHTML = '<p style="text-align:center;">Carregando...</p>';
     carregarBanners();
     try {
         const q = await getDocs(collection(db, "produtos"));
         todosProdutos = []; 
-        q.forEach((doc) => { todosProdutos.push({ id: doc.id, ...doc.data() }); });
+        q.forEach((doc) => { todosProdutos.push({id:doc.id, ...doc.data()}); });
         if(container) exibirProdutos(todosProdutos);
     } catch (e) { console.error(e); }
 }
@@ -101,14 +79,12 @@ function exibirProdutos(lista) {
     const agora = new Date().getTime();
 
     lista.forEach(prod => {
-        const card = document.createElement('div');
-        card.className = 'product-card';
-        let capa = (prod.imagens && prod.imagens.length > 0) ? prod.imagens[0] : (prod.img || 'https://via.placeholder.com/150');
+        const card = document.createElement('div'); card.className = 'product-card';
+        let capa = (prod.imagens && prod.imagens.length > 0) ? prod.imagens[0] : (prod.img || '');
         const est = parseInt(prod.estoque) || 0;
         
         let priceHtml = `<div class="new-price">${window.fmtMoney(prod.preco)}</div>`;
         let badgeOffHtml = '';
-        let badgeNewHtml = '';
         let leftPos = 10;
 
         if(prod.precoOriginal && prod.precoOriginal > prod.preco) {
@@ -118,85 +94,153 @@ function exibirProdutos(lista) {
             leftPos += 70;
         }
 
-        if(prod.dataCriacao && (agora - prod.dataCriacao.seconds * 1000) < seteDiasMs) {
-            badgeNewHtml = `<div class="badge-new" style="left:${leftPos}px">Novo</div>`;
-        }
-
+        let badgeNewHtml = (prod.dataCriacao && (agora - prod.dataCriacao.seconds * 1000) < seteDiasMs) ? `<div class="badge-new" style="left:${leftPos}px">Novo</div>` : '';
         let stockHtml = (est > 0 && est < 5) ? `<span class="badge-stock">Restam ${est}!</span>` : '';
         const heartClass = favoritos.includes(prod.id) ? 'fas fa-heart fav-btn active' : 'far fa-heart fav-btn';
 
-        card.innerHTML = `
-            ${badgeOffHtml} ${badgeNewHtml}
-            <i class="${heartClass}" onclick="toggleFavorito('${prod.id}', this, event)"></i>
+        card.innerHTML = `${badgeOffHtml} ${badgeNewHtml} <i class="${heartClass}" onclick="toggleFavorito('${prod.id}', this, event)"></i>
             <div class="product-img" style="background-image: url('${capa}'); cursor: pointer;" onclick="window.location.href='produto.html?id=${prod.id}'"></div>
             <div style="width:100%;">
                 <h3>${prod.nome}</h3>
                 ${stockHtml}
                 <div class="price-box">${priceHtml}</div>
+                <div class="card-qty-selector">
+                    <button class="card-qty-btn" onclick="alterarQtdCard(this, -1)">-</button>
+                    <input type="text" class="card-qty-input" value="1" readonly>
+                    <button class="card-qty-btn" onclick="alterarQtdCard(this, 1)">+</button>
+                </div>
             </div>
-            <button class="btn-comprar" ${est===0?'disabled':''}>${est===0?'Esgotado':'Adicionar'}</button>
-        `;
+            <button class="btn-add" onclick="adicionarComQtd('${prod.id}', this)" ${est===0?'disabled':''}>${est===0?'Esgotado':'Adicionar'}</button>`;
         container.appendChild(card);
-        if(est > 0) card.querySelector('.btn-comprar').addEventListener('click', () => adicionarAoCarrinho(prod));
     });
 }
 
-// --- CARRINHO & FILTROS ---
-window.filtrarPorPreco = () => {
-    const min = parseFloat(document.getElementById('price-min').value) || 0;
-    const max = parseFloat(document.getElementById('price-max').value) || Infinity;
-    exibirProdutos(todosProdutos.filter(p => p.preco >= min && p.preco <= max));
-}
-window.ordenarProdutos = () => {
-    const tipo = document.getElementById('sort-select').value;
-    let l = [...todosProdutos];
-    if(tipo === 'menor') l.sort((a,b) => a.preco - b.preco);
-    if(tipo === 'maior') l.sort((a,b) => b.preco - a.preco);
-    exibirProdutos(l);
-}
-window.filtrarCategoria = (cat) => { document.getElementById('titulo-secao').innerText = cat; exibirProdutos(cat==='Todas'?todosProdutos:todosProdutos.filter(p=>p.categoria===cat)); }
+// --- FUNÇÕES DE QUANTIDADE E CARRINHO (A Lógica Robusta) ---
 
-window.toggleFavorito = (id, el, e) => {
-    e.stopPropagation();
-    if(favoritos.includes(id)) { favoritos = favoritos.filter(f => f !== id); el.className = 'far fa-heart fav-btn'; window.showToast("Removido"); }
-    else { favoritos.push(id); el.className = 'fas fa-heart fav-btn active'; window.showToast("Favoritado!"); }
-    localStorage.setItem('lston_favoritos', JSON.stringify(favoritos));
+// 1. Alterar o número no input do card (Vitrine)
+window.alterarQtdCard = (btn, delta) => {
+    const input = btn.parentNode.querySelector('input');
+    let val = parseInt(input.value) + delta;
+    if(val < 1) val = 1;
+    // Opcional: Validar estoque visualmente aqui, mas a validação real ocorre ao adicionar
+    input.value = val;
 }
-window.filtrarFavoritos = () => { document.getElementById('titulo-secao').innerText="Favoritos"; exibirProdutos(todosProdutos.filter(p=>favoritos.includes(p.id))); }
 
-function adicionarAoCarrinho(produto) {
+// 2. Botão "Adicionar" do Card chama esta função
+window.adicionarComQtd = (id, btnElement) => {
+    const prod = todosProdutos.find(p => p.id === id);
+    // Busca o input de quantidade que está no mesmo card do botão clicado
+    const card = btnElement.parentElement; 
+    const qtyInput = card.querySelector('.card-qty-input');
+    const qtd = parseInt(qtyInput.value);
+    
+    adicionarAoCarrinho(prod, qtd);
+}
+
+// 3. Adicionar ao Carrinho (Com verificação de Estoque e ID Único)
+function adicionarAoCarrinho(produto, qtd = 1) {
+    const estoqueDisponivel = parseInt(produto.estoque) || 0;
+    
+    // Verifica se já existe no carrinho para somar a quantidade atual
+    const itemExistente = carrinho.find(p => p.id === produto.id);
+    const qtdNoCarrinho = itemExistente ? itemExistente.qtd : 0;
+    
+    // VERIFICAÇÃO DE ESTOQUE
+    if (qtdNoCarrinho + qtd > estoqueDisponivel) {
+        window.showToast(`Estoque insuficiente! Você já tem ${qtdNoCarrinho} no carrinho e o limite é ${estoqueDisponivel}.`, "error");
+        return;
+    }
+
     let capa = (produto.imagens && produto.imagens.length > 0) ? produto.imagens[0] : (produto.img || '');
-    carrinho.push({ ...produto, img: capa });
+    
+    if(itemExistente) {
+        // Se já existe, SOMA a quantidade (Não cria novo item)
+        itemExistente.qtd += qtd;
+    } else {
+        // Se não existe, cria novo item salvando o ID para garantir unicidade
+        carrinho.push({ ...produto, img: capa, qtd: qtd });
+    }
+    
     localStorage.setItem('lston_carrinho', JSON.stringify(carrinho));
-    window.showToast("Adicionado!");
+    window.showToast("Adicionado ao carrinho!");
+    atualizarCarrinhoUI();
+    window.toggleCarrinho(); // Abre o carrinho para feedback
+}
+
+// 4. Alterar quantidade DENTRO do Carrinho (+ e -)
+window.alterarQtdCarrinho = (index, delta) => {
+    const item = carrinho[index];
+    const estoqueDisponivel = parseInt(item.estoque) || 0;
+
+    // Se estiver tentando aumentar, verifica o estoque
+    if (delta > 0 && item.qtd + delta > estoqueDisponivel) {
+        window.showToast("Limite de estoque atingido!", "error");
+        return;
+    }
+
+    item.qtd += delta;
+
+    // Se zerar, remove do carrinho
+    if(item.qtd < 1) {
+        carrinho.splice(index, 1);
+    }
+    
+    localStorage.setItem('lston_carrinho', JSON.stringify(carrinho));
     atualizarCarrinhoUI();
 }
-window.removerDoCarrinho = (index) => { carrinho.splice(index, 1); localStorage.setItem('lston_carrinho', JSON.stringify(carrinho)); atualizarCarrinhoUI(); }
 
 function atualizarCarrinhoUI() {
     const count = document.getElementById('cart-count');
-    if(count) {
-        count.innerText = carrinho.length;
-        count.style.display = carrinho.length > 0 ? 'block' : 'none';
+    if(count) { 
+        // Mostra a soma total de itens (ex: 2 tênis + 1 camisa = 3)
+        const totalItens = carrinho.reduce((acc, item) => acc + item.qtd, 0);
+        count.innerText = totalItens; 
+        count.style.display = totalItens > 0 ? 'block' : 'none'; 
     }
+    
     const lista = document.getElementById('itens-carrinho');
     if(!lista) return;
 
-    let subtotal = 0; lista.innerHTML = '';
+    let subtotal = 0; 
+    lista.innerHTML = '';
+    
+    if(carrinho.length === 0) {
+        lista.innerHTML = '<p style="text-align:center; padding:20px; color:#999;">Seu carrinho está vazio.</p>';
+    }
+
     carrinho.forEach((item, index) => {
-        subtotal += parseFloat(item.preco);
-        lista.innerHTML += `<div class="cart-item"><div style="display:flex;align-items:center;"><img src="${item.img}" style="width:50px;height:50px;object-fit:cover;border-radius:4px;margin-right:10px;"><div class="item-info"><strong>${item.nome}</strong><br>${window.fmtMoney(item.preco)}</div></div><i class="fas fa-trash item-remove" onclick="window.removerDoCarrinho(${index})"></i></div>`;
+        subtotal += parseFloat(item.preco) * item.qtd;
+        lista.innerHTML += `
+            <div class="cart-item">
+                <div style="display:flex;align-items:center;">
+                    <img src="${item.img}">
+                    <div class="item-info">
+                        <strong>${item.nome}</strong><br>
+                        ${window.fmtMoney(item.preco)} cada
+                        <div class="cart-qty-control">
+                            <button class="cart-qty-btn" onclick="alterarQtdCarrinho(${index}, -1)">-</button>
+                            <span class="cart-qty-val">${item.qtd}</span>
+                            <button class="cart-qty-btn" onclick="alterarQtdCarrinho(${index}, 1)">+</button>
+                        </div>
+                    </div>
+                </div>
+                <i class="fas fa-trash item-remove" onclick="window.removerDoCarrinho(${index})"></i>
+            </div>`;
     });
+    
     const total = subtotal - (subtotal * desconto);
     const texto = desconto > 0 ? `De: <s>${window.fmtMoney(subtotal)}</s> Por: ${window.fmtMoney(total)}` : window.fmtMoney(total);
     if(document.getElementById('cart-total')) document.getElementById('cart-total').innerHTML = texto;
 }
 
-window.toggleCarrinho = () => { 
-    const modal = document.getElementById('carrinho-modal');
-    modal.style.display = (modal.style.display === 'flex') ? 'none' : 'flex';
-    atualizarCarrinhoUI();
-}
+// --- OUTRAS FUNÇÕES (Mantidas) ---
+window.toggleCarrinho = () => { const m = document.getElementById('carrinho-modal'); m.style.display = (m.style.display === 'flex') ? 'none' : 'flex'; if(m.style.display==='flex') atualizarCarrinhoUI(); }
+window.removerDoCarrinho = (index) => { carrinho.splice(index, 1); localStorage.setItem('lston_carrinho', JSON.stringify(carrinho)); atualizarCarrinhoUI(); }
+window.filtrarPorPreco = () => { const min = parseFloat(document.getElementById('price-min').value)||0; const max = parseFloat(document.getElementById('price-max').value)||Infinity; exibirProdutos(todosProdutos.filter(p => p.preco >= min && p.preco <= max)); }
+window.ordenarProdutos = () => { const t = document.getElementById('sort-select').value; let l = [...todosProdutos]; if(t==='menor') l.sort((a,b)=>a.preco-b.preco); if(t==='maior') l.sort((a,b)=>b.preco-a.preco); exibirProdutos(l); }
+window.filtrarCategoria = (cat) => { document.getElementById('titulo-secao').innerText = cat; exibirProdutos(cat==='Todas'?todosProdutos:todosProdutos.filter(p=>p.categoria===cat)); }
+window.toggleFavorito = (id, el, e) => { e.stopPropagation(); if(favoritos.includes(id)) { favoritos = favoritos.filter(f=>f!==id); el.className='far fa-heart fav-btn'; window.showToast("Removido"); } else { favoritos.push(id); el.className='fas fa-heart fav-btn active'; window.showToast("Favoritado!"); } localStorage.setItem('lston_favoritos', JSON.stringify(favoritos)); }
+window.filtrarFavoritos = () => { document.getElementById('titulo-secao').innerText="Favoritos"; exibirProdutos(todosProdutos.filter(p=>favoritos.includes(p.id))); }
 window.irParaCheckout = () => { document.getElementById('etapa-carrinho').style.display='none'; document.getElementById('etapa-checkout').style.display='flex'; }
 window.voltarParaCarrinho = () => { document.getElementById('etapa-checkout').style.display='none'; document.getElementById('etapa-carrinho').style.display='block'; }
 
@@ -221,22 +265,17 @@ window.confirmarPedido = async () => {
     if(!nome || !endereco) return window.showToast("Preencha tudo!", "error");
     window.toggleLoading(true);
     try {
-        let total = 0; carrinho.forEach(i => total += parseFloat(i.preco));
+        let total = 0; carrinho.forEach(i => total += parseFloat(i.preco) * i.qtd);
         total = total - (total * desconto);
-        await addDoc(collection(db, "pedidos"), {
-            cliente: nome, endereco, itens: carrinho, total, 
-            data: new Date().toISOString(), status: "Recebido",
-            userEmail: currentUserEmail
-        });
+        await addDoc(collection(db, "pedidos"), { cliente: nome, endereco, itens: carrinho, total, data: new Date().toISOString(), status: "Recebido", userEmail: currentUserEmail });
         for (const item of carrinho) {
             const ref = doc(db, "produtos", item.id);
-            const nv = parseInt(item.estoque) - 1;
+            const nv = parseInt(item.estoque) - item.qtd; // Reduz a quantidade correta
             if (nv >= 0) await updateDoc(ref, { estoque: nv });
         }
         window.showToast("Sucesso!"); carrinho=[]; localStorage.setItem('lston_carrinho', '[]'); atualizarCarrinhoUI(); window.location.href="index.html";
     } catch(e){ window.showToast("Erro", "error"); } finally { window.toggleLoading(false); }
 }
-
 window.buscarCep = async () => {
     const cep = document.getElementById('check-cep').value.replace(/\D/g, '');
     if(cep.length !== 8) return;
@@ -244,12 +283,9 @@ window.buscarCep = async () => {
     try {
         const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
         const data = await res.json();
-        if(!data.erro) {
-            document.getElementById('check-endereco').value = `${data.logradouro}, ${data.bairro}`;
-            document.getElementById('check-cidade').value = `${data.localidade}/${data.uf}`;
-            window.showToast("Endereço encontrado!");
-        }
+        if(!data.erro) { document.getElementById('check-endereco').value = `${data.logradouro}, ${data.bairro}`; document.getElementById('check-cidade').value = `${data.localidade}/${data.uf}`; window.showToast("Endereço encontrado!"); }
     } catch(e) {} finally { window.toggleLoading(false); }
 }
+window.assinarNews = async () => { const email = document.getElementById('news-email').value; if(email) { await addDoc(collection(db, "newsletter"), { email, data: new Date() }); window.showToast("Inscrito!"); } }
 
 carregarLoja(); atualizarCarrinhoUI();
