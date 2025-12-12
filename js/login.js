@@ -24,13 +24,13 @@ document.getElementById('loginForm').addEventListener('submit', async function(e
 });
 
 window.recuperarSenha = async () => {
-    const email = prompt("Digite seu e-mail para recuperar a senha:");
+    const email = prompt("Digite seu e-mail:");
     if(email) {
         try {
             await sendPasswordResetEmail(auth, email);
             notify("E-mail de recuperação enviado!", "success");
         } catch(e) {
-            notify("Erro ao enviar e-mail. Verifique o endereço.", "error");
+            notify("Erro ao enviar e-mail.", "error");
         }
     }
 }

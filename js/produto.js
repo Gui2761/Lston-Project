@@ -12,7 +12,7 @@ let carrinho = JSON.parse(localStorage.getItem('lston_carrinho')) || [];
 let desconto = 0;
 let currentUserEmail = null;
 
-// Helpers (Mesmos da main.js para funcionar)
+// Helpers
 window.showToast = (msg, type='success') => { Toastify({ text: msg, duration: 3000, style: { background: type==='error'?"#c62828":"#2c3e50" } }).showToast(); }
 window.fmtMoney = (val) => { return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val); }
 window.toggleLoading = (show) => { const el = document.getElementById('loading-overlay'); if(el) el.style.display = show ? 'flex' : 'none'; }
@@ -22,6 +22,7 @@ window.toggleTheme = () => {
     body.setAttribute('data-theme', body.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
     document.getElementById('theme-toggle').className = body.getAttribute('data-theme') === 'dark' ? 'fas fa-moon' : 'fas fa-sun';
 }
+window.toggleMenu = () => { document.getElementById('nav-menu').classList.toggle('active'); }
 
 onAuthStateChanged(auth, (user) => { if (user) { currentUserEmail = user.email; document.getElementById('user-name').innerText = user.email.split('@')[0]; } });
 
@@ -111,7 +112,7 @@ window.calcularFrete = () => {
     setTimeout(() => { res.innerHTML = `Frete Econômico: R$ ${(Math.random()*20+10).toFixed(2)} (5 dias)`; }, 1000);
 }
 
-// Funções de Carrinho (Copiadas da Main para funcionar aqui)
+// Funções de Carrinho
 function atualizarCarrinhoUI() {
     document.getElementById('cart-count').innerText = carrinho.length;
     document.getElementById('cart-count').style.display = 'block';

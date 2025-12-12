@@ -9,8 +9,8 @@ let desconto = 0;
 let currentUserEmail = null;
 const container = document.getElementById('products-container');
 
-// HELPERS
-window.showToast = (msg, type='success') => { Toastify({ text: msg, duration: 3000, style: { background: type==='error'?"#c62828":"#2c3e50" } }).showToast(); }
+// UX Helpers
+window.showToast = (msg, type='success') => { Toastify({ text: msg, duration: 3000, style: { background: type==='error'?"#e74c3c":"#2c3e50" } }).showToast(); }
 window.fmtMoney = (val) => { return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val); }
 window.toggleLoading = (show) => { const el = document.getElementById('loading-overlay'); if(el) el.style.display = show ? 'flex' : 'none'; }
 window.mascaraCep = (el) => { el.value = el.value.replace(/\D/g, "").replace(/^(\d{5})(\d)/, "$1-$2"); };
@@ -84,15 +84,24 @@ function exibirProdutos(lista) {
         let capa = (prod.imagens && prod.imagens.length > 0) ? prod.imagens[0] : (prod.img || 'https://via.placeholder.com/150');
         const est = parseInt(prod.estoque) || 0;
         
+        // De/Por
         let priceHtml = `<div class="new-price">${window.fmtMoney(prod.preco)}</div>`;
         let badgeOffHtml = '';
+        let badgeNewHtml = '';
+        let leftPos = 10; // Posição inicial para badges na esquerda
+
         if(prod.precoOriginal && prod.precoOriginal > prod.preco) {
             const off = Math.round(((prod.precoOriginal - prod.preco) / prod.precoOriginal) * 100);
             priceHtml = `<div class="old-price">${window.fmtMoney(prod.precoOriginal)}</div><div class="new-price">${window.fmtMoney(prod.preco)}</div>`;
-            badgeOffHtml = `<div class="badge-off">${off}% OFF</div>`;
+            badgeOffHtml = `<div class="badge-off" style="left:${leftPos}px">${off}% OFF</div>`;
+            leftPos += 70; // Empurra o próximo badge
         }
 
-        let badgeNewHtml = (prod.dataCriacao && (agora - prod.dataCriacao.seconds * 1000) < seteDiasMs) ? `<div class="badge-new">Novo</div>` : '';
+        // CORREÇÃO: Badge Novo na ESQUERDA (empilhado ou ao lado do OFF)
+        if(prod.dataCriacao && (agora - prod.dataCriacao.seconds * 1000) < seteDiasMs) {
+            badgeNewHtml = `<div class="badge-new" style="left:${leftPos}px">Novo</div>`;
+        }
+
         let stockHtml = (est > 0 && est < 5) ? `<span class="badge-stock">Restam ${est}!</span>` : '';
         const heartClass = favoritos.includes(prod.id) ? 'fas fa-heart fav-btn active' : 'far fa-heart fav-btn';
 
@@ -112,7 +121,7 @@ function exibirProdutos(lista) {
     });
 }
 
-// FILTROS
+// Filtros e Carrinho
 window.filtrarPorPreco = () => {
     const min = parseFloat(document.getElementById('price-min').value) || 0;
     const max = parseFloat(document.getElementById('price-max').value) || Infinity;
@@ -126,9 +135,7 @@ window.ordenarProdutos = () => {
     exibirProdutos(l);
 }
 window.filtrarCategoria = (cat) => { document.getElementById('titulo-secao').innerText = cat; exibirProdutos(cat==='Todas'?todosProdutos:todosProdutos.filter(p=>p.categoria===cat)); }
-document.getElementById('campo-busca').addEventListener('input', (e) => { exibirProdutos(todosProdutos.filter(p=>p.nome.toLowerCase().includes(e.target.value.toLowerCase()))); });
 
-// FAVORITOS
 window.toggleFavorito = (id, el, e) => {
     e.stopPropagation();
     if(favoritos.includes(id)) { favoritos = favoritos.filter(f => f !== id); el.className = 'far fa-heart fav-btn'; window.showToast("Removido"); }
@@ -137,7 +144,6 @@ window.toggleFavorito = (id, el, e) => {
 }
 window.filtrarFavoritos = () => { document.getElementById('titulo-secao').innerText="Favoritos"; exibirProdutos(todosProdutos.filter(p=>favoritos.includes(p.id))); }
 
-// CARRINHO & PEDIDO
 function adicionarAoCarrinho(produto) {
     let capa = (produto.imagens && produto.imagens.length > 0) ? produto.imagens[0] : (produto.img || '');
     carrinho.push({ ...produto, img: capa });
@@ -147,6 +153,7 @@ function adicionarAoCarrinho(produto) {
     document.getElementById('cart-count').style.display = 'block';
 }
 window.removerDoCarrinho = (index) => { carrinho.splice(index, 1); localStorage.setItem('lston_carrinho', JSON.stringify(carrinho)); atualizarCarrinhoUI(); }
+
 function atualizarCarrinhoUI() {
     const lista = document.getElementById('itens-carrinho');
     let subtotal = 0; lista.innerHTML = '';
@@ -158,6 +165,22 @@ function atualizarCarrinhoUI() {
     const texto = desconto > 0 ? `De: <s>${window.fmtMoney(subtotal)}</s> Por: ${window.fmtMoney(total)}` : window.fmtMoney(total);
     if(document.getElementById('cart-total')) document.getElementById('cart-total').innerHTML = texto;
 }
+
+// CORREÇÃO: Função para fechar carrinho
+window.toggleCarrinho = () => { 
+    const modal = document.getElementById('carrinho-modal');
+    // Alterna entre flex e none
+    if (modal.style.display === 'flex') {
+        modal.style.display = 'none';
+    } else {
+        modal.style.display = 'flex';
+        atualizarCarrinhoUI();
+    }
+}
+
+window.irParaCheckout = () => { document.getElementById('etapa-carrinho').style.display='none'; document.getElementById('etapa-checkout').style.display='flex'; }
+window.voltarParaCarrinho = () => { document.getElementById('etapa-checkout').style.display='none'; document.getElementById('etapa-carrinho').style.display='block'; }
+
 window.aplicarCupom = async () => {
     const codigo = document.getElementById('cupom-input').value.toUpperCase();
     window.toggleLoading(true);
@@ -172,23 +195,15 @@ window.aplicarCupom = async () => {
         atualizarCarrinhoUI();
     } catch(e) { window.showToast("Erro", "error"); } finally { window.toggleLoading(false); }
 }
+
 window.confirmarPedido = async () => {
     const nome = document.getElementById('check-nome').value;
-    const endereco = document.getElementById('check-endereco').value;
-    const cidade = document.getElementById('check-cidade').value;
-    const pagamento = document.getElementById('check-pagamento').value;
-    
-    if(!nome || !endereco) return window.showToast("Preencha tudo!", "error");
+    if(!nome) return window.showToast("Preencha tudo!", "error");
     window.toggleLoading(true);
-
     try {
         let total = 0; carrinho.forEach(i => total += parseFloat(i.preco));
         total = total - (total * desconto);
-        await addDoc(collection(db, "pedidos"), {
-            cliente: nome, endereco, cidade, pagamento, itens: carrinho, total, 
-            data: new Date().toISOString(), status: "Recebido",
-            userEmail: currentUserEmail
-        });
+        await addDoc(collection(db, "pedidos"), { cliente: nome, itens: carrinho, total, data: new Date().toISOString(), status: "Recebido", userEmail: currentUserEmail });
         for (const item of carrinho) {
             const ref = doc(db, "produtos", item.id);
             const nv = parseInt(item.estoque) - 1;
@@ -208,13 +223,9 @@ window.buscarCep = async () => {
             document.getElementById('check-endereco').value = `${data.logradouro}, ${data.bairro}`;
             document.getElementById('check-cidade').value = `${data.localidade}/${data.uf}`;
             window.showToast("Endereço encontrado!");
-        } else window.showToast("CEP não encontrado", "error");
-    } catch(e) { window.showToast("Erro no CEP", "error"); } finally { window.toggleLoading(false); }
+        }
+    } catch(e) {} finally { window.toggleLoading(false); }
 }
-
-window.toggleCarrinho = () => { document.getElementById('carrinho-modal').style.display = 'flex'; atualizarCarrinhoUI(); }
-window.irParaCheckout = () => { document.getElementById('etapa-carrinho').style.display='none'; document.getElementById('etapa-checkout').style.display='flex'; }
-window.voltarParaCarrinho = () => { document.getElementById('etapa-checkout').style.display='none'; document.getElementById('etapa-carrinho').style.display='block'; }
 window.assinarNews = async () => { const email = document.getElementById('news-email').value; if(email) { await addDoc(collection(db, "newsletter"), { email, data: new Date() }); window.showToast("Inscrito!"); } }
 
 carregarLoja(); atualizarCarrinhoUI();

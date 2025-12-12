@@ -3,10 +3,7 @@ import { collection, addDoc, getDocs, getDoc, deleteDoc, updateDoc, doc } from "
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
-onAuthStateChanged(auth, (user) => { 
-    if(!user) window.location.href="login.html"; 
-    else { renderizarTabela(); renderizarDashboard(); renderizarBanners(); renderizarCupons(); } 
-});
+onAuthStateChanged(auth, (user) => { if(!user) window.location.href="login.html"; else { renderizarTabela(); renderizarDashboard(); renderizarBanners(); renderizarCupons(); } });
 
 const produtosCollection = collection(db, "produtos");
 const pedidosCollection = collection(db, "pedidos");
@@ -14,14 +11,11 @@ const bannersCollection = collection(db, "banners");
 const cuponsCollection = collection(db, "cupons");
 let chartCat=null, chartFat=null;
 let todosPedidosCache = [];
-let todosProdutosCache = [];
 
-// HELPERS
 function showToast(msg, type='success') { Toastify({ text: msg, duration: 3000, style: { background: type==='error'?"#c62828":"#2c3e50" } }).showToast(); }
 function toggleLoading(show) { document.getElementById('loading-overlay').style.display = show ? 'flex' : 'none'; }
 function fmtMoney(val) { return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val); }
 
-// NAVEGAÇÃO
 const sections = ['dashboard','produtos','pedidos','banners','cupons'];
 sections.forEach(s => {
     document.getElementById(`link-${s}`).addEventListener('click', (e) => {
@@ -31,7 +25,6 @@ sections.forEach(s => {
     });
 });
 
-// --- DASHBOARD ---
 async function renderizarDashboard() {
     const q = await getDocs(pedidosCollection);
     let cats={}, dias={}, totalFat=0, totalVendas=0;
@@ -56,14 +49,12 @@ function desenharGraficos(cats, dias) {
     chartFat = new Chart(document.getElementById('graficoFaturamento'), { type:'line', data:{ labels:sorted, datasets:[{label:'Faturamento', data:sorted.map(d=>dias[d]), borderColor:'#8bc34a', fill:true}] } });
 }
 
-// --- PEDIDOS (FILTRO + CSV) ---
 document.getElementById('filtro-status').addEventListener('change', filtrarPedidos);
 function filtrarPedidos() {
     const filtro = document.getElementById('filtro-status').value;
     const tbody = document.getElementById('tabela-pedidos');
     tbody.innerHTML = '';
     const lista = filtro === 'Todos' ? todosPedidosCache : todosPedidosCache.filter(p => p.status === filtro);
-    if(lista.length===0) tbody.innerHTML = '<tr><td colspan="5">Nenhum pedido.</td></tr>';
     lista.forEach(p => {
         const opts = ['Recebido','Enviado','Entregue'];
         let sel = `<select id="st-${p.id}" style="padding:5px;">`;
@@ -74,33 +65,21 @@ function filtrarPedidos() {
     });
 }
 async function updateStatus(id, st) { try { await updateDoc(doc(db,"pedidos",id), {status:st}); showToast("Atualizado!"); } catch(e) { showToast("Erro", "error"); } }
-
 window.exportarPedidos = () => {
-    let csv = "Data,Cliente,Email,Total,Status\n";
-    todosPedidosCache.forEach(p => { csv += `${new Date(p.data).toLocaleDateString()},${p.cliente},${p.userEmail||'-'},${p.total},${p.status}\n`; });
+    let csv = "Data,Cliente,Total,Status\n";
+    todosPedidosCache.forEach(p => { csv += `${new Date(p.data).toLocaleDateString()},${p.cliente},${p.total},${p.status}\n`; });
     const a = document.createElement('a'); a.href = window.URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = 'pedidos.csv'; a.click();
 };
 
-// --- PRODUTOS (COM BUSCA) ---
 async function renderizarTabela() {
-    const q = await getDocs(produtosCollection);
-    todosProdutosCache = [];
-    q.forEach(d => { const p = d.data(); p.id = d.id; todosProdutosCache.push(p); });
-    filtrarProdutosAdmin();
-}
-
-window.filtrarProdutosAdmin = () => {
-    const termo = document.getElementById('busca-produto-admin').value.toLowerCase();
     const tbody = document.getElementById('tabela-produtos');
     const count = document.getElementById('total-estoque-count');
-    tbody.innerHTML = '';
-    let est = 0;
-    
-    const filtrados = todosProdutosCache.filter(p => p.nome.toLowerCase().includes(termo));
-    filtrados.forEach(p => {
-        est += parseInt(p.estoque)||0;
+    const q = await getDocs(produtosCollection);
+    tbody.innerHTML=''; let est=0;
+    q.forEach(d => {
+        const p = d.data(); est += parseInt(p.estoque)||0;
         const img = (p.imagens && p.imagens.length > 0) ? p.imagens[0] : (p.img || '');
-        tbody.innerHTML += `<tr><td><img src="${img}" style="width:40px;"></td><td>${p.nome}</td><td>${p.estoque}</td><td>${fmtMoney(p.preco)}</td><td><i class="fas fa-edit" onclick="window.editarProduto('${p.id}')" style="margin-right:10px;cursor:pointer;color:blue;"></i><i class="fas fa-trash" onclick="window.deletarProduto('${p.id}')" style="color:red;cursor:pointer;"></i></td></tr>`;
+        tbody.innerHTML += `<tr><td><img src="${img}" style="width:40px;"></td><td>${p.nome}</td><td>${p.estoque}</td><td>${fmtMoney(p.preco)}</td><td><i class="fas fa-edit" onclick="window.editarProduto('${d.id}')" style="margin-right:10px;cursor:pointer;"></i><i class="fas fa-trash" onclick="window.deletarProduto('${d.id}')" style="color:red;cursor:pointer;"></i></td></tr>`;
     });
     count.innerText = est;
 }
@@ -141,19 +120,13 @@ document.getElementById('btn-save-prod').addEventListener('click', async functio
                 urls.push(await getDownloadURL(s.ref));
             }
         }
-        let dados = { 
-            nome, preco:parseFloat(preco), 
-            precoOriginal: precoAntigo ? parseFloat(precoAntigo) : null,
-            estoque:parseInt(est), categoria:cat, descricao:desc 
-        };
-        
+        let dados = { nome, preco:parseFloat(preco), precoOriginal: precoAntigo ? parseFloat(precoAntigo) : null, estoque:parseInt(est), categoria:cat, descricao:desc };
         if(id) { if(urls.length>0) dados.imagens=urls; await updateDoc(doc(db,"produtos",id), dados); }
         else { dados.imagens=urls; dados.dataCriacao=new Date(); await addDoc(produtosCollection, dados); }
         showToast("Salvo!"); window.fecharModal(); renderizarTabela();
     } catch(e){ showToast("Erro", "error"); } finally { toggleLoading(false); }
 });
 
-// --- BANNERS & CUPONS ---
 async function renderizarBanners() {
     const tbody = document.getElementById('tabela-banners');
     const q = await getDocs(bannersCollection);
@@ -167,7 +140,7 @@ document.getElementById('btn-save-banner').addEventListener('click', async () =>
     const titulo = document.getElementById('banner-titulo').value;
     const sub = document.getElementById('banner-sub').value;
     const arq = document.getElementById('banner-img').files[0];
-    if(!titulo || !arq) return showToast("Preencha tudo", "error");
+    if(!titulo || !arq) return showToast("Preencha!", "error");
     toggleLoading(true);
     try {
         const s = await uploadBytes(ref(storage, `banners/${Date.now()}`), arq);
@@ -191,23 +164,13 @@ document.getElementById('btn-save-cupom').addEventListener('click', async () => 
     const codigo = document.getElementById('cupom-code').value.toUpperCase();
     const desconto = document.getElementById('cupom-val').value;
     const validade = document.getElementById('cupom-validade').value;
-    if(!codigo || !desconto) return showToast("Preencha!", "error");
+    if(!codigo) return showToast("Preencha!", "error");
     try { await addDoc(cuponsCollection, { codigo, desconto, validade }); showToast("Criado!"); document.getElementById('modalCupom').style.display='none'; renderizarCupons(); } catch(e){}
 });
 window.delCupom = async (id) => { if(confirm("Excluir?")) await deleteDoc(doc(db,"cupons",id)); renderizarCupons(); };
 
-window.verDetalhes = (id) => { 
-    const p = todosPedidosCache.find(x => x.id === id);
-    if(p) {
-        document.getElementById('conteudo-detalhes').innerHTML=`<p><strong>Cliente:</strong> ${p.cliente}</p><p>End: ${p.endereco}</p><hr><ul>${p.itens.map(i=>`<li>${i.nome}</li>`).join('')}</ul><p>Total: ${fmtMoney(p.total)}</p>`;
-        document.getElementById('modalDetalhes').style.display='flex';
-    }
-}
-window.abrirModalProduto = () => { 
-    document.getElementById('prod-id').value=""; document.getElementById('modal-titulo').innerText="Novo";
-    ['prod-nome','prod-preco','prod-preco-antigo','prod-estoque','prod-desc'].forEach(id => document.getElementById(id).value = "");
-    document.getElementById('modalProduto').style.display='flex'; 
-}
+window.verDetalhes = (id) => { const p = todosPedidosCache.find(x => x.id === id); if(p) { document.getElementById('conteudo-detalhes').innerHTML=`<p><strong>Cliente:</strong> ${p.cliente}</p><p>End: ${p.endereco}</p><hr><ul>${p.itens.map(i=>`<li>${i.nome}</li>`).join('')}</ul><p>Total: ${fmtMoney(p.total)}</p>`; document.getElementById('modalDetalhes').style.display='flex'; } }
+window.abrirModalProduto = () => { document.getElementById('prod-id').value=""; document.getElementById('modalProduto').style.display='flex'; }
 window.fecharModal = () => document.getElementById('modalProduto').style.display='none';
 window.deletarProduto = async (id) => { if(confirm('Apagar?')) { await deleteDoc(doc(db,"produtos",id)); renderizarTabela(); } }
 document.getElementById('btn-logout').addEventListener('click', async (e)=>{e.preventDefault(); await signOut(auth); window.location.href="login.html";});
