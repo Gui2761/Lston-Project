@@ -2,15 +2,12 @@ import { db, auth } from "./firebaseConfig.js";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 
+// Tema persistente
+const savedTheme = localStorage.getItem('lston_theme') || 'light';
+document.body.setAttribute('data-theme', savedTheme);
+
 const pedidosList = document.getElementById('lista-meus-pedidos');
 function fmtMoney(val) { return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val); }
-
-// Theme Toggle (para manter consistência)
-window.toggleTheme = () => {
-    const body = document.body;
-    body.setAttribute('data-theme', body.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
-    document.getElementById('theme-toggle').className = body.getAttribute('data-theme') === 'dark' ? 'fas fa-moon' : 'fas fa-sun';
-}
 
 onAuthStateChanged(auth, async (user) => {
     if (!user) { window.location.href = "login.html"; return; }
@@ -24,7 +21,7 @@ async function carregarPedidos(email) {
         const querySnapshot = await getDocs(q);
 
         pedidosList.innerHTML = '';
-        if (querySnapshot.empty) { pedidosList.innerHTML = '<p style="color:var(--text-muted)">Você ainda não fez nenhum pedido.</p>'; return; }
+        if (querySnapshot.empty) { pedidosList.innerHTML = '<p style="color:var(--text-muted)">Nenhum pedido encontrado.</p>'; return; }
 
         querySnapshot.forEach((doc) => {
             const p = doc.data();
@@ -49,7 +46,7 @@ async function carregarPedidos(email) {
             `;
             pedidosList.appendChild(card);
         });
-    } catch (error) { console.error("Erro:", error); }
+    } catch (error) { console.error(error); }
 }
 
 document.getElementById('btn-logout-client').addEventListener('click', async () => {

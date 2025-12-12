@@ -2,6 +2,27 @@ import { db, auth } from "./firebaseConfig.js";
 import { collection, getDocs, addDoc, doc, updateDoc, query, where } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 
+// --- LÓGICA DE TEMA (PERSISTÊNCIA) ---
+// Executa imediatamente ao carregar o arquivo
+const savedTheme = localStorage.getItem('lston_theme') || 'light';
+document.body.setAttribute('data-theme', savedTheme);
+// Atualiza o ícone se ele existir
+const themeIcon = document.getElementById('theme-toggle');
+if(themeIcon) themeIcon.className = savedTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+
+window.toggleTheme = () => {
+    const body = document.body;
+    const currentTheme = body.getAttribute('data-theme');
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    
+    body.setAttribute('data-theme', newTheme);
+    localStorage.setItem('lston_theme', newTheme); // Salva na memória
+    
+    const icon = document.getElementById('theme-toggle');
+    if(icon) icon.className = newTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+}
+
+// --- VARIÁVEIS GLOBAIS ---
 let carrinho = JSON.parse(localStorage.getItem('lston_carrinho')) || []; 
 let favoritos = JSON.parse(localStorage.getItem('lston_favoritos')) || [];
 let todosProdutos = []; 
@@ -9,20 +30,20 @@ let desconto = 0;
 let currentUserEmail = null;
 const container = document.getElementById('products-container');
 
-// UX Helpers
-window.showToast = (msg, type='success') => { Toastify({ text: msg, duration: 3000, style: { background: type==='error'?"#e74c3c":"#2c3e50" } }).showToast(); }
+// --- HELPERS ---
+window.showToast = (msg, type='success') => { 
+    if(typeof Toastify !== 'undefined') {
+        Toastify({ text: msg, duration: 3000, style: { background: type==='error'?"#e74c3c":"#2c3e50" } }).showToast(); 
+    } else {
+        alert(msg); // Fallback caso Toastify falhe
+    }
+}
 window.fmtMoney = (val) => { return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val); }
 window.toggleLoading = (show) => { const el = document.getElementById('loading-overlay'); if(el) el.style.display = show ? 'flex' : 'none'; }
 window.mascaraCep = (el) => { el.value = el.value.replace(/\D/g, "").replace(/^(\d{5})(\d)/, "$1-$2"); };
-window.toggleTheme = () => {
-    const body = document.body;
-    const isDark = body.getAttribute('data-theme') === 'dark';
-    body.setAttribute('data-theme', isDark ? 'light' : 'dark');
-    document.getElementById('theme-toggle').className = isDark ? 'fas fa-moon' : 'fas fa-sun';
-}
 window.toggleMenu = () => { document.getElementById('nav-menu').classList.toggle('active'); }
 
-// AUTH
+// --- AUTH ---
 onAuthStateChanged(auth, (user) => {
     const userDisplay = document.getElementById('user-name');
     if (user) {
@@ -33,7 +54,7 @@ onAuthStateChanged(auth, (user) => {
     }
 });
 
-// BANNERS
+// --- CARROSSEL ---
 let slideIndex = 0;
 async function carregarBanners() {
     try {
@@ -61,19 +82,20 @@ window.mudarSlide = (n) => {
     atualizarSlider();
 }
 
-// PRODUTOS
+// --- PRODUTOS ---
 async function carregarLoja() {
-    container.innerHTML = '<p style="text-align:center;">Carregando...</p>';
+    if(container) container.innerHTML = '<p style="text-align:center;">Carregando...</p>';
     carregarBanners();
     try {
         const q = await getDocs(collection(db, "produtos"));
         todosProdutos = []; 
         q.forEach((doc) => { todosProdutos.push({ id: doc.id, ...doc.data() }); });
-        exibirProdutos(todosProdutos);
+        if(container) exibirProdutos(todosProdutos);
     } catch (e) { console.error(e); }
 }
 
 function exibirProdutos(lista) {
+    if(!container) return;
     container.innerHTML = ''; 
     const seteDiasMs = 7 * 24 * 60 * 60 * 1000;
     const agora = new Date().getTime();
@@ -84,20 +106,18 @@ function exibirProdutos(lista) {
         let capa = (prod.imagens && prod.imagens.length > 0) ? prod.imagens[0] : (prod.img || 'https://via.placeholder.com/150');
         const est = parseInt(prod.estoque) || 0;
         
-        // De/Por
         let priceHtml = `<div class="new-price">${window.fmtMoney(prod.preco)}</div>`;
         let badgeOffHtml = '';
         let badgeNewHtml = '';
-        let leftPos = 10; // Posição inicial para badges na esquerda
+        let leftPos = 10;
 
         if(prod.precoOriginal && prod.precoOriginal > prod.preco) {
             const off = Math.round(((prod.precoOriginal - prod.preco) / prod.precoOriginal) * 100);
             priceHtml = `<div class="old-price">${window.fmtMoney(prod.precoOriginal)}</div><div class="new-price">${window.fmtMoney(prod.preco)}</div>`;
             badgeOffHtml = `<div class="badge-off" style="left:${leftPos}px">${off}% OFF</div>`;
-            leftPos += 70; // Empurra o próximo badge
+            leftPos += 70;
         }
 
-        // CORREÇÃO: Badge Novo na ESQUERDA (empilhado ou ao lado do OFF)
         if(prod.dataCriacao && (agora - prod.dataCriacao.seconds * 1000) < seteDiasMs) {
             badgeNewHtml = `<div class="badge-new" style="left:${leftPos}px">Novo</div>`;
         }
@@ -121,7 +141,7 @@ function exibirProdutos(lista) {
     });
 }
 
-// Filtros e Carrinho
+// --- CARRINHO & FILTROS ---
 window.filtrarPorPreco = () => {
     const min = parseFloat(document.getElementById('price-min').value) || 0;
     const max = parseFloat(document.getElementById('price-max').value) || Infinity;
@@ -149,13 +169,19 @@ function adicionarAoCarrinho(produto) {
     carrinho.push({ ...produto, img: capa });
     localStorage.setItem('lston_carrinho', JSON.stringify(carrinho));
     window.showToast("Adicionado!");
-    document.getElementById('cart-count').innerText = carrinho.length;
-    document.getElementById('cart-count').style.display = 'block';
+    atualizarCarrinhoUI();
 }
 window.removerDoCarrinho = (index) => { carrinho.splice(index, 1); localStorage.setItem('lston_carrinho', JSON.stringify(carrinho)); atualizarCarrinhoUI(); }
 
 function atualizarCarrinhoUI() {
+    const count = document.getElementById('cart-count');
+    if(count) {
+        count.innerText = carrinho.length;
+        count.style.display = carrinho.length > 0 ? 'block' : 'none';
+    }
     const lista = document.getElementById('itens-carrinho');
+    if(!lista) return;
+
     let subtotal = 0; lista.innerHTML = '';
     carrinho.forEach((item, index) => {
         subtotal += parseFloat(item.preco);
@@ -166,18 +192,11 @@ function atualizarCarrinhoUI() {
     if(document.getElementById('cart-total')) document.getElementById('cart-total').innerHTML = texto;
 }
 
-// CORREÇÃO: Função para fechar carrinho
 window.toggleCarrinho = () => { 
     const modal = document.getElementById('carrinho-modal');
-    // Alterna entre flex e none
-    if (modal.style.display === 'flex') {
-        modal.style.display = 'none';
-    } else {
-        modal.style.display = 'flex';
-        atualizarCarrinhoUI();
-    }
+    modal.style.display = (modal.style.display === 'flex') ? 'none' : 'flex';
+    atualizarCarrinhoUI();
 }
-
 window.irParaCheckout = () => { document.getElementById('etapa-carrinho').style.display='none'; document.getElementById('etapa-checkout').style.display='flex'; }
 window.voltarParaCarrinho = () => { document.getElementById('etapa-checkout').style.display='none'; document.getElementById('etapa-carrinho').style.display='block'; }
 
@@ -198,12 +217,17 @@ window.aplicarCupom = async () => {
 
 window.confirmarPedido = async () => {
     const nome = document.getElementById('check-nome').value;
-    if(!nome) return window.showToast("Preencha tudo!", "error");
+    const endereco = document.getElementById('check-endereco').value;
+    if(!nome || !endereco) return window.showToast("Preencha tudo!", "error");
     window.toggleLoading(true);
     try {
         let total = 0; carrinho.forEach(i => total += parseFloat(i.preco));
         total = total - (total * desconto);
-        await addDoc(collection(db, "pedidos"), { cliente: nome, itens: carrinho, total, data: new Date().toISOString(), status: "Recebido", userEmail: currentUserEmail });
+        await addDoc(collection(db, "pedidos"), {
+            cliente: nome, endereco, itens: carrinho, total, 
+            data: new Date().toISOString(), status: "Recebido",
+            userEmail: currentUserEmail
+        });
         for (const item of carrinho) {
             const ref = doc(db, "produtos", item.id);
             const nv = parseInt(item.estoque) - 1;
@@ -212,6 +236,7 @@ window.confirmarPedido = async () => {
         window.showToast("Sucesso!"); carrinho=[]; localStorage.setItem('lston_carrinho', '[]'); atualizarCarrinhoUI(); window.location.href="index.html";
     } catch(e){ window.showToast("Erro", "error"); } finally { window.toggleLoading(false); }
 }
+
 window.buscarCep = async () => {
     const cep = document.getElementById('check-cep').value.replace(/\D/g, '');
     if(cep.length !== 8) return;
@@ -226,6 +251,5 @@ window.buscarCep = async () => {
         }
     } catch(e) {} finally { window.toggleLoading(false); }
 }
-window.assinarNews = async () => { const email = document.getElementById('news-email').value; if(email) { await addDoc(collection(db, "newsletter"), { email, data: new Date() }); window.showToast("Inscrito!"); } }
 
 carregarLoja(); atualizarCarrinhoUI();
