@@ -1,0 +1,10 @@
+# Ignorar configuração do Firebase (Chaves de API)
+js/firebaseConfig.js
+
+# Dependências do Node (se você usar no futuro)
+node_modules/
+
+# Arquivos de sistema e logs
+.DS_Store
+Thumbs.db
+*.log
