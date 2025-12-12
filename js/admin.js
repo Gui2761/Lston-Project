@@ -1,8 +1,9 @@
-import { db, auth } from "./firebaseConfig.js";
+import { db, auth, storage } from "./firebaseConfig.js"; // Adicionado storage
 import { collection, addDoc, getDocs, deleteDoc, doc } from "firebase/firestore";
 import { onAuthStateChanged, signOut } from "firebase/auth";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage"; // Funções de Upload
 
-// 1. Proteção de Rota: Só carrega se estiver logado
+// 1. Proteção de Rota
 onAuthStateChanged(auth, (user) => {
     if (!user) {
         window.location.href = "login.html";
@@ -13,18 +14,18 @@ onAuthStateChanged(auth, (user) => {
 
 const produtosCollection = collection(db, "produtos");
 
-// 2. Funções Globais (para abrir/fechar modal pelo HTML)
+// 2. Funções Globais
 window.abrirModalProduto = function() {
     document.getElementById('modalProduto').style.display = 'flex';
 }
 window.fecharModal = function() {
     document.getElementById('prod-nome').value = '';
     document.getElementById('prod-preco').value = '';
-    document.getElementById('prod-img').value = '';
+    document.getElementById('prod-img').value = ''; // Limpa o input de arquivo
     document.getElementById('modalProduto').style.display = 'none';
 }
 
-// 3. Renderizar Tabela (Ler do Firestore)
+// 3. Renderizar Tabela
 async function renderizarTabela() {
     const tbody = document.getElementById('tabela-produtos');
     const contador = document.getElementById('total-produtos-count');
@@ -39,10 +40,11 @@ async function renderizarTabela() {
         querySnapshot.forEach((docSnap) => {
             count++;
             const prod = docSnap.data();
-            const id = docSnap.id; // ID único do Firestore
+            const id = docSnap.id;
             
             const tr = document.createElement('tr');
-            const imgDisplay = prod.img ? `<img src="${prod.img}" style="width:40px; height:40px; object-fit:cover; border-radius:4px;">` : '<i class="fas fa-image"></i>';
+            // Verifica se tem imagem
+            const imgDisplay = prod.img ? `<img src="${prod.img}" style="width:50px; height:50px; object-fit:cover; border-radius:4px;">` : '<i class="fas fa-image"></i>';
 
             tr.innerHTML = `
                 <td>${imgDisplay}</td>
@@ -54,42 +56,62 @@ async function renderizarTabela() {
             `;
             tbody.appendChild(tr);
 
-            // Adiciona evento de clique no botão de lixeira
             document.getElementById(`btn-del-${id}`).addEventListener('click', () => deletarProduto(id));
         });
 
         contador.innerText = count + " Itens";
-
-        if(count === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Nenhum produto cadastrado.</td></tr>';
-        }
+        if(count === 0) tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Nenhum produto cadastrado.</td></tr>';
 
     } catch (error) {
         console.error("Erro ao ler dados:", error);
-        tbody.innerHTML = '<tr><td colspan="4">Erro ao carregar dados.</td></tr>';
     }
 }
 
-// 4. Salvar Produto (Escrever no Firestore)
-document.getElementById('btn-save-prod').addEventListener('click', async () => {
+// 4. Salvar Produto (COM UPLOAD)
+document.getElementById('btn-save-prod').addEventListener('click', async function() {
     const nome = document.getElementById('prod-nome').value;
     const preco = document.getElementById('prod-preco').value;
-    const img = document.getElementById('prod-img').value;
+    const arquivoInput = document.getElementById('prod-img');
+    const arquivo = arquivoInput.files[0]; // Pega o arquivo selecionado
+    const btn = this;
 
     if(nome && preco) {
         try {
+            btn.innerText = "Salvando...";
+            btn.disabled = true;
+
+            let urlImagem = "";
+
+            // Se o usuário selecionou uma foto, faz o upload
+            if (arquivo) {
+                // Cria uma referência no Storage (ex: produtos/tenis.jpg)
+                const storageRef = ref(storage, `produtos/${new Date().getTime()}_${arquivo.name}`);
+                
+                // Sobe o arquivo
+                const snapshot = await uploadBytes(storageRef, arquivo);
+                
+                // Pega o link da internet para essa foto
+                urlImagem = await getDownloadURL(snapshot.ref);
+            }
+
+            // Salva no Banco de Dados com o link da foto
             await addDoc(produtosCollection, {
                 nome: nome,
                 preco: parseFloat(preco),
-                img: img,
+                img: urlImagem, // Salva a URL gerada pelo Firebase
                 dataCriacao: new Date()
             });
+
             alert('Produto salvo com sucesso!');
             fecharModal();
             renderizarTabela();
+
         } catch (e) {
             console.error("Erro ao salvar:", e);
-            alert("Erro ao salvar produto.");
+            alert("Erro ao salvar produto: " + e.message);
+        } finally {
+            btn.innerText = "Salvar";
+            btn.disabled = false;
         }
     } else {
         alert("Preencha nome e preço.");
@@ -104,7 +126,6 @@ async function deletarProduto(id) {
             renderizarTabela();
         } catch (e) {
             console.error("Erro ao deletar:", e);
-            alert("Erro ao excluir.");
         }
     }
 }
