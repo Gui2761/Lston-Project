@@ -10,14 +10,21 @@
     <script type="importmap"> { "imports": { "firebase/app": "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js", "firebase/auth": "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js", "firebase/firestore": "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js", "firebase/storage": "https://www.gstatic.com/firebasejs/10.13.0/firebase-storage.js" } } </script>
 </head>
 <body>
+    <div id="loading-overlay" class="loading-overlay"><div class="spinner"></div></div>
+    
     <header>
         <div class="logo"><a href="index.html">L&st<span>ON</span></a></div>
-        <div class="search-bar"><input type="text" placeholder="Buscar..."><i class="fas fa-search"></i></div>
-        <div class="user-actions"><a href="login.html"><i class="far fa-user"></i></a><a href="index.html"><i class="fas fa-shopping-cart"></i></a></div>
+        <div class="nav-menu"><a href="index.html">Voltar para Loja</a></div>
+        <div class="user-actions">
+            <i class="fas fa-moon" id="theme-toggle" onclick="toggleTheme()" style="cursor:pointer;"></i>
+            <a href="perfil.html" title="Minha Conta" id="user-display"><i class="far fa-user"></i> <span id="user-name" style="font-size:12px;">Login</span></a>
+            <div style="position:relative;cursor:pointer;" onclick="toggleCarrinho()"><i class="fas fa-shopping-cart"></i><span id="cart-count" style="position:absolute;top:-8px;right:-8px;background:red;color:white;border-radius:50%;padding:2px 5px;font-size:10px;">0</span></div>
+        </div>
     </header>
 
     <main>
         <div id="product-detail-container"><p style="text-align:center; padding:50px;">Carregando...</p></div>
+
         <div style="max-width: 1200px; margin: 0 auto; padding: 20px;">
             <div class="reviews-section">
                 <h3>Avaliações</h3>
@@ -34,6 +41,33 @@
         </div>
     </main>
 
+    <div id="carrinho-modal" class="cart-modal-overlay">
+        <div class="cart-modal">
+            <div class="cart-header"><h3>Carrinho</h3><i class="fas fa-times" style="cursor:pointer;" onclick="toggleCarrinho()"></i></div>
+            <div id="etapa-carrinho">
+                <div id="itens-carrinho" class="cart-items"></div>
+                <div class="coupon-area"><input type="text" id="cupom-input" placeholder="Cupom"><button onclick="aplicarCupom()">Aplicar</button></div>
+                <div class="cart-footer"><div class="total-price">Total: <span id="cart-total">R$ 0,00</span></div><button class="btn-checkout" onclick="irParaCheckout()">Continuar</button></div>
+            </div>
+            <div id="etapa-checkout" style="display: none; flex-direction: column; height: 100%;">
+                <div style="flex:1; overflow-y:auto;">
+                    <p>Entrega:</p>
+                    <div style="display:flex; gap:5px; margin-bottom:10px;">
+                        <input type="text" id="check-cep" placeholder="CEP" oninput="mascaraCep(this)" onblur="buscarCep()" maxlength="9">
+                        <button onclick="buscarCep()" style="padding:0 10px; cursor:pointer;">Busca</button>
+                    </div>
+                    <input type="text" id="check-endereco" placeholder="Endereço">
+                    <input type="text" id="check-cidade" placeholder="Cidade">
+                    <input type="text" id="check-nome" placeholder="Seu Nome">
+                    <p>Pagamento:</p>
+                    <select id="check-pagamento" style="width:100%; padding:8px; margin-bottom:10px;"><option value="Pix">Pix</option><option value="Cartão">Cartão</option></select>
+                </div>
+                <div class="cart-footer"><button class="btn-checkout" onclick="confirmarPedido()">Finalizar</button><button onclick="voltarParaCarrinho()" style="width:100%; padding:10px; border:none; background:none; cursor:pointer;">Voltar</button></div>
+            </div>
+        </div>
+    </div>
+
+    <footer><div class="copyright">&copy; 2025 L&stON.</div></footer>
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
     <script type="module" src="js/produto.js"></script>
 </body>

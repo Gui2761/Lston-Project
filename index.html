@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>L&stON - E-commerce</title>
+    <title>L&stON - Home</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
@@ -18,31 +18,43 @@
     <header>
         <div class="mobile-menu-icon" onclick="toggleMenu()"><i class="fas fa-bars"></i></div>
         <div class="logo"><a href="index.html">L&st<span>ON</span></a></div>
+        
         <div class="nav-menu" id="nav-menu">
             <a href="#" onclick="filtrarCategoria('Todas')">Início</a>
             <a href="#" onclick="filtrarCategoria('Roupas')">Roupas</a>
             <a href="#" onclick="filtrarCategoria('Calçados')">Calçados</a>
             <a href="#" onclick="filtrarCategoria('Tecnologia')">Tech</a>
         </div>
-        <div class="search-bar"><input type="text" id="campo-busca" placeholder="Buscar..."><i class="fas fa-search"></i></div>
+
+        <div class="search-bar"><input type="text" id="campo-busca" placeholder="O que você procura?"><i class="fas fa-search"></i></div>
+        
         <div class="user-actions">
             <i class="fas fa-moon" id="theme-toggle" onclick="toggleTheme()" style="cursor:pointer;" title="Modo Escuro"></i>
-            <a href="perfil.html" id="link-perfil" title="Minha Conta"><i class="far fa-user"></i></a>
-            <a href="#" onclick="filtrarFavoritos()" title="Favoritos"><i class="far fa-heart"></i></a>
-            <div style="position:relative;cursor:pointer;" onclick="toggleCarrinho()"><i class="fas fa-shopping-cart"></i><span id="cart-count" style="position:absolute;top:-8px;right:-8px;background:red;color:white;border-radius:50%;padding:2px 5px;font-size:10px;">0</span></div>
+            <a href="perfil.html" id="link-perfil" title="Minha Conta" style="display:flex; align-items:center; gap:5px;">
+                <i class="far fa-user"></i> <span id="user-name" style="font-size:12px;">Entrar</span>
+            </a>
+            <a href="#" onclick="filtrarFavoritos()" title="Meus Favoritos"><i class="far fa-heart"></i></a>
+            
+            <div style="position: relative; cursor: pointer;" onclick="toggleCarrinho()">
+                <i class="fas fa-shopping-cart"></i>
+                <span id="cart-count" style="position:absolute; top:-8px; right:-8px; background:red; color:white; border-radius:50%; padding:2px 5px; font-size:10px;">0</span>
+            </div>
         </div>
     </header>
 
     <main>
         <section class="carousel-section">
-            <div class="slider-container" id="slider"><div class="slide" style="background:#2c3e50;"><h2>Bem-vindo à L&stON</h2></div></div>
-            <button class="slider-btn prev-btn" onclick="mudarSlide(-1)">&#10094;</button><button class="slider-btn next-btn" onclick="mudarSlide(1)">&#10095;</button>
+            <div class="slider-container" id="slider">
+                <div class="slide" style="background:#2c3e50;"><h2>Bem-vindo à L&stON</h2></div>
+            </div>
+            <button class="slider-btn prev-btn" onclick="mudarSlide(-1)">&#10094;</button>
+            <button class="slider-btn next-btn" onclick="mudarSlide(1)">&#10095;</button>
         </section>
 
         <div class="filter-container">
             <div>
-                <input type="number" id="price-min" placeholder="Min" class="filter-input">
-                <input type="number" id="price-max" placeholder="Max" class="filter-input">
+                <input type="number" id="price-min" placeholder="R$ Min" class="filter-input">
+                <input type="number" id="price-max" placeholder="R$ Max" class="filter-input">
                 <button onclick="filtrarPorPreco()" class="filter-btn">Filtrar</button>
             </div>
             <select id="sort-select" onchange="ordenarProdutos()" class="filter-select">
@@ -52,7 +64,8 @@
             </select>
         </div>
 
-        <section class="products-section" id="products-container"><p>Carregando...</p></section>
+        <h2 style="text-align:center; margin-bottom: 20px;" id="titulo-secao">Destaques</h2>
+        <section class="products-section" id="products-container"><p>Carregando produtos...</p></section>
     </main>
 
     <div class="newsletter">
@@ -67,11 +80,16 @@
     <div id="carrinho-modal" class="cart-modal-overlay">
         <div class="cart-modal">
             <div class="cart-header"><h3>Carrinho</h3><i class="fas fa-times" style="cursor:pointer;" onclick="toggleCarrinho()"></i></div>
+            
             <div id="etapa-carrinho">
                 <div id="itens-carrinho" class="cart-items"></div>
-                <div class="coupon-area"><input type="text" id="cupom-input" placeholder="Cupom"><button onclick="aplicarCupom()">Aplicar</button></div>
-                <div class="cart-footer"><div class="total-price">Total: <span id="cart-total">R$ 0,00</span></div><button class="btn-checkout" onclick="irParaCheckout()">Continuar</button></div>
+                <div class="coupon-area"><input type="text" id="cupom-input" placeholder="Cupom (ex: NATAL10)"><button onclick="aplicarCupom()">Aplicar</button></div>
+                <div class="cart-footer">
+                    <div class="total-price">Total: <span id="cart-total">R$ 0,00</span></div>
+                    <button class="btn-checkout" onclick="irParaCheckout()">Continuar Compra</button>
+                </div>
             </div>
+
             <div id="etapa-checkout" style="display: none; flex-direction: column; height: 100%;">
                 <div style="flex:1; overflow-y:auto;">
                     <p>Entrega:</p>
@@ -85,12 +103,14 @@
                     <p>Pagamento:</p>
                     <select id="check-pagamento" style="width:100%; padding:8px; margin-bottom:10px;"><option value="Pix">Pix</option><option value="Cartão">Cartão</option></select>
                 </div>
-                <div class="cart-footer"><button class="btn-checkout" onclick="confirmarPedido()">Finalizar</button><button onclick="voltarParaCarrinho()" style="width:100%; padding:10px; border:none; background:none; cursor:pointer;">Voltar</button></div>
+                <div class="cart-footer"><button class="btn-checkout" onclick="confirmarPedido()">Finalizar Pedido</button><button onclick="voltarParaCarrinho()" style="width:100%; padding:10px; border:none; background:none; cursor:pointer;">Voltar</button></div>
             </div>
         </div>
     </div>
 
-    <footer><div class="copyright">&copy; 2025 L&stON.</div></footer>
+    <section class="benefits-bar"><div class="benefits-container"><div class="benefit-item"><i class="fas fa-credit-card"></i><div class="benefit-text"><h4>Pagamento Fácil</h4><p>Até 12x</p></div></div><div class="benefit-item"><i class="fas fa-truck"></i><div class="benefit-text"><h4>Frete Rápido</h4><p>Todo Brasil</p></div></div><div class="benefit-item"><i class="fas fa-shield-alt"></i><div class="benefit-text"><h4>100% Seguro</h4><p>Garantido</p></div></div></div></section>
+    <footer><div class="footer-content"><div class="footer-col"><h4>L&stON</h4><ul><li><a href="#">Sobre nós</a></li></ul></div><div class="footer-col"><h4>Ajuda</h4><ul><li><a href="#">Rastrear</a></li></ul></div></div><div class="copyright">&copy; 2025 L&stON.</div></footer>
+
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
     <script type="module" src="js/main.js"></script>
 </body>

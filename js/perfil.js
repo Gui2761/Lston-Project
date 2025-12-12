@@ -1,66 +1,57 @@
 import { db, auth } from "./firebaseConfig.js";
-import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
+import { collection, query, where, getDocs } from "firebase/firestore";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 
 const pedidosList = document.getElementById('lista-meus-pedidos');
-
 function fmtMoney(val) { return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val); }
 
+// Theme Toggle (para manter consistência)
+window.toggleTheme = () => {
+    const body = document.body;
+    body.setAttribute('data-theme', body.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+    document.getElementById('theme-toggle').className = body.getAttribute('data-theme') === 'dark' ? 'fas fa-moon' : 'fas fa-sun';
+}
+
 onAuthStateChanged(auth, async (user) => {
-    if (!user) {
-        window.location.href = "login.html";
-        return;
-    }
-    
+    if (!user) { window.location.href = "login.html"; return; }
     document.getElementById('user-email-display').innerText = user.email;
     carregarPedidos(user.email);
 });
 
 async function carregarPedidos(email) {
     try {
-        // Busca pedidos onde o campo 'userEmail' é igual ao email do usuário
         const q = query(collection(db, "pedidos"), where("userEmail", "==", email));
-        const querySnapshot = await getDocs(q); // Nota: index composto pode ser necessário para orderBy, então simplificamos
+        const querySnapshot = await getDocs(q);
 
         pedidosList.innerHTML = '';
-        if (querySnapshot.empty) {
-            pedidosList.innerHTML = '<p>Você ainda não fez nenhum pedido.</p>';
-            return;
-        }
+        if (querySnapshot.empty) { pedidosList.innerHTML = '<p style="color:var(--text-muted)">Você ainda não fez nenhum pedido.</p>'; return; }
 
         querySnapshot.forEach((doc) => {
             const p = doc.data();
             const data = new Date(p.data).toLocaleDateString('pt-BR');
-            
             let itensHtml = '';
             p.itens.forEach(item => {
-                itensHtml += `<div style="display:flex; gap:10px; margin-bottom:5px; align-items:center;">
+                itensHtml += `<div style="display:flex; gap:10px; margin-bottom:5px; align-items:center; color:var(--text-color);">
                     <img src="${item.img}" style="width:40px; height:40px; object-fit:cover; border-radius:4px;">
                     <span style="font-size:14px;">${item.nome}</span>
                 </div>`;
             });
 
-            // Card do Pedido
             const card = document.createElement('div');
-            card.style = "background: #fff; border: 1px solid #eee; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);";
+            card.style = "background: var(--card-bg); border: 1px solid var(--border-color); padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);";
             card.innerHTML = `
-                <div style="display:flex; justify-content:space-between; border-bottom:1px solid #eee; padding-bottom:10px; margin-bottom:10px;">
+                <div style="display:flex; justify-content:space-between; border-bottom:1px solid var(--border-color); padding-bottom:10px; margin-bottom:10px; color:var(--text-color);">
                     <strong>Data: ${data}</strong>
                     <span class="status-badge status-${p.status.toLowerCase()}">${p.status}</span>
                 </div>
                 <div style="margin-bottom:10px;">${itensHtml}</div>
-                <div style="text-align:right; font-weight:bold; color:#2c3e50;">Total: ${fmtMoney(p.total)}</div>
+                <div style="text-align:right; font-weight:bold; color:var(--accent-color);">Total: ${fmtMoney(p.total)}</div>
             `;
             pedidosList.appendChild(card);
         });
-
-    } catch (error) {
-        console.error("Erro:", error);
-        pedidosList.innerHTML = '<p>Erro ao carregar pedidos.</p>';
-    }
+    } catch (error) { console.error("Erro:", error); }
 }
 
 document.getElementById('btn-logout-client').addEventListener('click', async () => {
-    await signOut(auth);
-    window.location.href = "login.html";
+    await signOut(auth); window.location.href = "login.html";
 });
