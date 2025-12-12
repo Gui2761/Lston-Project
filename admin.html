@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>L&ston - Painel Admin</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+
+    <nav class="sidebar">
+        <h2>L&st<span>ON</span> Admin</h2>
+        <a href="#" class="menu-item active"><i class="fas fa-chart-line"></i> Dashboard</a>
+        <a href="#" class="menu-item"><i class="fas fa-box"></i> Produtos</a>
+        <a href="#" class="menu-item"><i class="fas fa-users"></i> Pedidos</a>
+        <a href="#" id="btn-logout" class="menu-item logout-btn"><i class="fas fa-sign-out-alt"></i> Sair</a>
+    </nav>
+
+    <main class="main-content">
+        <div class="header-admin">
+            <h1>Visão Geral</h1>
+            <div>Olá, <strong>Administrador</strong></div>
+        </div>
+
+        <div class="kpi-container">
+            <div class="kpi-card">
+                <h3>FATURAMENTO</h3>
+                <div class="value">R$ 0,00</div>
+            </div>
+            <div class="kpi-card blue-border">
+                <h3>VENDAS TOTAIS</h3>
+                <div class="value">0</div>
+            </div>
+            <div class="kpi-card red-border">
+                <h3>ESTOQUE TOTAL</h3>
+                <div class="value" id="total-produtos-count">0 Itens</div>
+            </div>
+        </div>
+
+        <div class="product-section">
+            <div class="section-header">
+                <h2>Gerenciar Produtos</h2>
+                <button class="btn-add" onclick="abrirModalProduto()">+ Novo Produto</button>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Imagem</th>
+                        <th>Nome</th>
+                        <th>Preço</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody id="tabela-produtos">
+                    </tbody>
+            </table>
+        </div>
+    </main>
+
+    <div id="modalProduto" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <h3>Cadastrar Novo Produto</h3>
+            <input type="text" id="prod-nome" placeholder="Nome do Produto">
+            <input type="number" id="prod-preco" placeholder="Preço (ex: 199.90)">
+            <input type="text" id="prod-img" placeholder="URL da Imagem">
+            <div class="modal-buttons">
+                <button id="btn-save-prod" class="btn-save">Salvar</button>
+                <button onclick="fecharModal()" class="btn-cancel">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="js/admin.js"></script>
+</body>
+</html>

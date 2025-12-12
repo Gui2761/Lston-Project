@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>L&ston - E-commerce</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+    <header>
+        <div class="logo">L&st<span>ON</span></div>
+        <div class="search-bar">
+            <input type="text" placeholder="O que você procura?">
+            <i class="fas fa-search"></i>
+        </div>
+        <div class="user-actions">
+            <a href="login.html"><i class="far fa-user"></i></a>
+            <i class="fas fa-shopping-cart"></i>
+        </div>
+    </header>
+
+    <main>
+        <section class="carousel-section">
+            <div class="carousel-box">
+                <div class="arrow">&lt;</div>
+                <div class="carousel-content">
+                    <h2>Bem-vindo à L&stON</h2>
+                    <p>As melhores ofertas estão aqui.</p>
+                </div>
+                <div class="arrow">&gt;</div>
+            </div>
+        </section>
+
+        <section class="categories-section">
+            <div class="category-item"><div class="circle"></div><span>Roupas</span></div>
+            <div class="category-item"><div class="circle"></div><span>Tênis</span></div>
+            <div class="category-item"><div class="circle"></div><span>Tech</span></div>
+        </section>
+
+        <h2 style="text-align:center; margin-bottom: 20px;">Destaques</h2>
+        <section class="products-section" id="products-container">
+            <p>Carregando produtos...</p>
+        </section>
+    </main>
+
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>
