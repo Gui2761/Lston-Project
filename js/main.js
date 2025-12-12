@@ -1,4 +1,3 @@
-// js/main.js
 import { db } from "./firebaseConfig.js";
 import { collection, getDocs } from "firebase/firestore";
 
@@ -32,11 +31,6 @@ async function carregarLoja() {
                 <button class="btn-comprar">Comprar</button>
             `;
             container.appendChild(card);
-            
-            // Adiciona evento ao botão (opcional)
-            card.querySelector('.btn-comprar').addEventListener('click', () => {
-                alert(`Você clicou em: ${prod.nome}`);
-            });
         });
 
     } catch (error) {
