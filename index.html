@@ -7,94 +7,96 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
-    <script type="importmap">
-      { "imports": { "firebase/app": "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js", "firebase/auth": "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js", "firebase/firestore": "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js", "firebase/storage": "https://www.gstatic.com/firebasejs/10.13.0/firebase-storage.js" } }
-    </script>
+    <script type="importmap"> { "imports": { "firebase/app": "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js", "firebase/auth": "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js", "firebase/firestore": "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js", "firebase/storage": "https://www.gstatic.com/firebasejs/10.13.0/firebase-storage.js" } } </script>
 </head>
 <body>
-    <div id="loading-overlay"><div class="spinner"></div><p>Carregando...</p></div>
+    <div id="loading-overlay" class="loading-overlay"><div class="spinner"></div></div>
+    
+    <a href="https://wa.me/5511999999999" target="_blank" class="whatsapp-float"><i class="fab fa-whatsapp"></i></a>
+    <div class="scroll-top-btn" onclick="window.scrollTo({top:0, behavior:'smooth'})"><i class="fas fa-arrow-up"></i></div>
 
     <header>
         <div class="mobile-menu-icon" onclick="toggleMenu()"><i class="fas fa-bars"></i></div>
         <div class="logo"><a href="index.html">L&st<span>ON</span></a></div>
-        
         <div class="nav-menu" id="nav-menu">
-            <a href="#" onclick="filtrarCategoria('Todas'); toggleMenu()">Início</a>
-            <a href="#" onclick="filtrarCategoria('Roupas'); toggleMenu()">Roupas</a>
-            <a href="#" onclick="filtrarCategoria('Calçados'); toggleMenu()">Calçados</a>
-            <a href="#" onclick="filtrarCategoria('Tecnologia'); toggleMenu()">Tech</a>
+            <a href="#" onclick="filtrarCategoria('Todas')">Início</a>
+            <a href="#" onclick="filtrarCategoria('Roupas')">Roupas</a>
+            <a href="#" onclick="filtrarCategoria('Calçados')">Calçados</a>
+            <a href="#" onclick="filtrarCategoria('Tecnologia')">Tech</a>
         </div>
-
         <div class="search-bar"><input type="text" id="campo-busca" placeholder="O que você procura?"><i class="fas fa-search"></i></div>
-        
         <div class="user-actions">
-            <a href="login.html" id="user-display" title="Login" style="font-size: 14px; display:flex; align-items:center; gap:5px;">
-                <i class="far fa-user"></i> <span id="user-name">Login</span>
-            </a>
-            
-            <div style="position: relative; cursor: pointer;" onclick="toggleCarrinho()">
-                <i class="fas fa-shopping-cart"></i>
-                <span id="cart-count" style="position:absolute; top:-10px; right:-10px; background:red; color:white; border-radius:50%; padding:2px 6px; font-size:12px; display:none;">0</span>
-            </div>
+            <i class="fas fa-moon" id="theme-toggle" onclick="toggleTheme()" style="cursor:pointer;" title="Modo Escuro"></i>
+            <a href="login.html"><i class="far fa-user"></i></a>
+            <a href="#" onclick="filtrarFavoritos()" title="Favoritos"><i class="far fa-heart"></i></a>
+            <div style="position:relative;cursor:pointer;" onclick="toggleCarrinho()"><i class="fas fa-shopping-cart"></i><span id="cart-count" style="position:absolute;top:-8px;right:-8px;background:red;color:white;border-radius:50%;padding:2px 5px;font-size:10px;">0</span></div>
         </div>
     </header>
 
     <main>
         <section class="carousel-section">
             <div class="slider-container" id="slider">
-                <div class="slide" style="background:#ddd; color:#333;"><h2>Carregando ofertas...</h2></div>
+                <div class="slide" style="background:#2c3e50;"><h2>Bem-vindo à L&stON</h2></div>
             </div>
             <button class="slider-btn prev-btn" onclick="mudarSlide(-1)">&#10094;</button>
             <button class="slider-btn next-btn" onclick="mudarSlide(1)">&#10095;</button>
         </section>
 
         <section class="categories-section">
-            <div class="category-item" onclick="filtrarCategoria('Todas')"><div class="circle" style="background:#2c3e50; color:white;"><i class="fas fa-border-all"></i></div><span>Todas</span></div>
+            <div class="category-item" onclick="filtrarCategoria('Todas')"><div class="circle"><i class="fas fa-border-all"></i></div><span>Todas</span></div>
             <div class="category-item" onclick="filtrarCategoria('Roupas')"><div class="circle"><i class="fas fa-tshirt"></i></div><span>Roupas</span></div>
             <div class="category-item" onclick="filtrarCategoria('Calçados')"><div class="circle"><i class="fas fa-shoe-prints"></i></div><span>Calçados</span></div>
             <div class="category-item" onclick="filtrarCategoria('Tecnologia')"><div class="circle"><i class="fas fa-laptop"></i></div><span>Tech</span></div>
-            <div class="category-item" onclick="filtrarCategoria('Esportes')"><div class="circle"><i class="fas fa-running"></i></div><span>Esportes</span></div>
         </section>
+
+        <div class="filter-bar">
+            <select id="sort-select" onchange="ordenarProdutos()">
+                <option value="padrao">Ordenar por: Padrão</option>
+                <option value="menor">Menor Preço</option>
+                <option value="maior">Maior Preço</option>
+            </select>
+        </div>
 
         <h2 style="text-align:center; margin-bottom: 20px;" id="titulo-secao">Destaques</h2>
         <section class="products-section" id="products-container"><p>Carregando...</p></section>
     </main>
 
+    <div class="newsletter">
+        <h3>Receba Ofertas Exclusivas</h3>
+        <p>Cadastre-se e ganhe descontos.</p>
+        <div style="display:flex; justify-content:center; gap:10px;">
+            <input type="email" id="news-email" placeholder="Seu e-mail">
+            <button onclick="assinarNews()">Cadastrar</button>
+        </div>
+    </div>
+
     <div id="carrinho-modal" class="cart-modal-overlay">
         <div class="cart-modal">
             <div class="cart-header"><h3>Carrinho</h3><i class="fas fa-times" style="cursor:pointer;" onclick="toggleCarrinho()"></i></div>
-            
             <div id="etapa-carrinho">
                 <div id="itens-carrinho" class="cart-items"></div>
-                <div class="coupon-area">
-                    <input type="text" id="cupom-input" placeholder="Cupom de Desconto">
-                    <button onclick="aplicarCupom()">Aplicar</button>
-                </div>
-                <div class="cart-footer">
-                    <div class="total-price">Total: <span id="cart-total">R$ 0,00</span></div>
-                    <button class="btn-checkout" onclick="irParaCheckout()">Continuar</button>
-                </div>
+                <div class="coupon-area"><input type="text" id="cupom-input" placeholder="Cupom"><button onclick="aplicarCupom()">Aplicar</button></div>
+                <div class="cart-footer"><div class="total-price">Total: <span id="cart-total">R$ 0,00</span></div><button class="btn-checkout" onclick="irParaCheckout()">Continuar</button></div>
             </div>
-
             <div id="etapa-checkout" style="display: none; flex-direction: column; height: 100%;">
                 <div style="flex:1; overflow-y:auto;">
                     <p>Entrega:</p>
                     <div style="display:flex; gap:5px; margin-bottom:10px;">
-                        <input type="text" id="check-cep" placeholder="CEP (somente números)" maxlength="8" onblur="buscarCep()">
+                        <input type="text" id="check-cep" placeholder="CEP" onblur="buscarCep()">
                         <button onclick="buscarCep()" style="padding:0 10px; cursor:pointer;">Busca</button>
                     </div>
-                    <input type="text" id="check-endereco" placeholder="Endereço" readonly style="background:#eee; width:100%; padding:8px; margin-bottom:10px; border:1px solid #ccc;">
-                    <input type="text" id="check-cidade" placeholder="Cidade" readonly style="background:#eee; width:100%; padding:8px; margin-bottom:10px; border:1px solid #ccc;">
-                    <input type="text" id="check-nome" placeholder="Seu Nome Completo" style="width:100%; padding:8px; margin-bottom:10px; border:1px solid #ccc;">
-                    
+                    <input type="text" id="check-endereco" placeholder="Endereço">
+                    <input type="text" id="check-cidade" placeholder="Cidade">
+                    <input type="text" id="check-nome" placeholder="Seu Nome">
                     <p>Pagamento:</p>
                     <select id="check-pagamento" style="width:100%; padding:8px; margin-bottom:10px;"><option value="Pix">Pix</option><option value="Cartão">Cartão</option></select>
                 </div>
-                <div class="cart-footer"><button class="btn-checkout" onclick="confirmarPedido()">Finalizar Pedido</button><button onclick="voltarParaCarrinho()" style="width:100%; padding:10px; border:none; background:none; cursor:pointer;">Voltar</button></div>
+                <div class="cart-footer"><button class="btn-checkout" onclick="confirmarPedido()">Finalizar</button><button onclick="voltarParaCarrinho()" style="width:100%; padding:10px; border:none; background:none; cursor:pointer;">Voltar</button></div>
             </div>
         </div>
     </div>
 
+    <footer><div class="copyright">&copy; 2025 L&stON.</div></footer>
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
     <script type="module" src="js/main.js"></script>
 </body>

@@ -7,27 +7,27 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
-    <script type="importmap">
-      { "imports": { "firebase/app": "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js", "firebase/auth": "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js", "firebase/firestore": "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js", "firebase/storage": "https://www.gstatic.com/firebasejs/10.13.0/firebase-storage.js" } }
-    </script>
+    <script type="importmap"> { "imports": { "firebase/app": "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js", "firebase/auth": "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js", "firebase/firestore": "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js", "firebase/storage": "https://www.gstatic.com/firebasejs/10.13.0/firebase-storage.js" } } </script>
 </head>
 <body>
-    <header>
-        <div class="logo"><a href="index.html">L&st<span>ON</span></a></div>
-        <div class="search-bar"><input type="text" placeholder="Buscar..."><i class="fas fa-search"></i></div>
-        <div class="user-actions"><a href="login.html"><i class="far fa-user"></i></a><a href="index.html"><i class="fas fa-shopping-cart"></i></a></div>
-    </header>
+    <header>...</header>
 
     <main>
         <div id="product-detail-container"><p style="text-align:center; padding:50px;">Carregando...</p></div>
+
         <div style="max-width: 1200px; margin: 0 auto; padding: 20px;">
-            <h2 style="margin-top: 50px; border-top: 1px solid #ddd; padding-top: 20px;">Relacionados:</h2>
-            <section class="products-section" id="related-container" style="justify-content: flex-start; margin-top: 20px;"></section>
+            <div class="reviews-section">
+                <h3>Avaliações dos Clientes</h3>
+                <div class="review-form">
+                    <p>Deixe sua avaliação:</p>
+                    <select id="rev-stars" style="padding:5px;"><option value="5">★★★★★</option><option value="4">★★★★</option></select>
+                    <textarea id="rev-text" placeholder="O que achou?"></textarea>
+                    <button class="btn-share" style="width:auto; margin-top:10px;" onclick="enviarReview()">Enviar Avaliação</button>
+                </div>
+                <div id="reviews-list" style="margin-top:20px;"></div>
+            </div>
         </div>
     </main>
-
-    <section class="benefits-bar"><div class="benefits-container"><div class="benefit-item"><i class="fas fa-credit-card"></i><div class="benefit-text"><h4>Pagamento Fácil</h4><p>Até 12x</p></div></div><div class="benefit-item"><i class="fas fa-truck"></i><div class="benefit-text"><h4>Frete Rápido</h4><p>Todo Brasil</p></div></div><div class="benefit-item"><i class="fas fa-shield-alt"></i><div class="benefit-text"><h4>100% Seguro</h4><p>Garantido</p></div></div></div></section>
-    <footer><div class="footer-content"><div class="footer-col"><h4>L&stON</h4><ul><li><a href="#">Sobre nós</a></li></ul></div><div class="footer-col"><h4>Ajuda</h4><ul><li><a href="#">Rastrear</a></li></ul></div><div class="footer-col"><h4>Social</h4><div class="social-links"><i class="fab fa-instagram"></i></div></div></div><div class="copyright">&copy; 2025 L&stON.</div></footer>
 
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
     <script type="module" src="js/produto.js"></script>
