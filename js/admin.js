@@ -1,138 +1,110 @@
-import { db, auth, storage } from "./firebaseConfig.js"; // Adicionado storage
-import { collection, addDoc, getDocs, deleteDoc, doc } from "firebase/firestore";
+import { db, auth, storage } from "./firebaseConfig.js";
+import { collection, addDoc, getDocs, getDoc, deleteDoc, updateDoc, doc } from "firebase/firestore";
 import { onAuthStateChanged, signOut } from "firebase/auth";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage"; // Funções de Upload
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
-// 1. Proteção de Rota
-onAuthStateChanged(auth, (user) => {
-    if (!user) {
-        window.location.href = "login.html";
-    } else {
-        renderizarTabela();
-    }
-});
+onAuthStateChanged(auth, (user) => { if(!user) window.location.href="login.html"; else { renderizarTabela(); renderizarDashboard(); } });
 
 const produtosCollection = collection(db, "produtos");
+const pedidosCollection = collection(db, "pedidos");
+let chartCat=null, chartFat=null;
 
-// 2. Funções Globais
-window.abrirModalProduto = function() {
-    document.getElementById('modalProduto').style.display = 'flex';
-}
-window.fecharModal = function() {
-    document.getElementById('prod-nome').value = '';
-    document.getElementById('prod-preco').value = '';
-    document.getElementById('prod-img').value = ''; // Limpa o input de arquivo
-    document.getElementById('modalProduto').style.display = 'none';
+document.getElementById('link-dashboard').addEventListener('click', (e)=>{e.preventDefault(); mostrarSecao('dashboard');});
+document.getElementById('link-produtos').addEventListener('click', (e)=>{e.preventDefault(); mostrarSecao('produtos');});
+document.getElementById('link-pedidos').addEventListener('click', (e)=>{e.preventDefault(); mostrarSecao('pedidos');});
+function mostrarSecao(s) { ['dashboard','produtos','pedidos'].forEach(x=>document.getElementById(`section-${x}`).style.display='none'); document.getElementById(`section-${s}`).style.display='block'; }
+
+async function renderizarDashboard() {
+    const tbody = document.getElementById('tabela-pedidos');
+    const q = await getDocs(pedidosCollection);
+    let cats={}, dias={}, totalFat=0, totalVendas=0;
+    tbody.innerHTML='';
+    q.forEach(d => {
+        const p = d.data(); totalVendas++; totalFat += p.total||0;
+        p.itens.forEach(i => cats[i.categoria||'Geral'] = (cats[i.categoria||'Geral']||0)+1);
+        dias[new Date(p.data).toLocaleDateString('pt-BR').slice(0,5)] = (dias[new Date(p.data).toLocaleDateString('pt-BR').slice(0,5)]||0)+p.total;
+        
+        const tr = document.createElement('tr');
+        const opts = ['Recebido','Preparando','Enviado','Entregue'];
+        let sel = `<select id="st-${d.id}" style="padding:5px;">`;
+        opts.forEach(o => sel += `<option value="${o}" ${p.status===o?'selected':''}>${o}</option>`);
+        sel += `</select>`;
+        tr.innerHTML = `<td>${new Date(p.data).toLocaleDateString('pt-BR')}</td><td>${p.cliente}</td><td>R$ ${p.total.toFixed(2)}</td><td>${sel}</td><td><button id="ver-${d.id}" style="background:#2196f3; color:white; border:none; padding:5px; cursor:pointer;"><i class="fas fa-eye"></i></button></td>`;
+        tbody.appendChild(tr);
+        document.getElementById(`st-${d.id}`).addEventListener('change', (e)=>updateDoc(doc(db,"pedidos",d.id), {status:e.target.value}));
+        document.getElementById(`ver-${d.id}`).addEventListener('click', ()=>verDetalhes(p));
+    });
+    document.getElementById('kpi-faturamento').innerText = `R$ ${totalFat.toFixed(2)}`;
+    document.getElementById('kpi-vendas').innerText = totalVendas;
+    desenharGraficos(cats, dias);
 }
 
-// 3. Renderizar Tabela
+function desenharGraficos(cats, dias) {
+    if(chartCat) chartCat.destroy(); if(chartFat) chartFat.destroy();
+    chartCat = new Chart(document.getElementById('graficoCategorias'), { type:'doughnut', data:{ labels:Object.keys(cats), datasets:[{data:Object.values(cats), backgroundColor:['#e74c3c','#3498db','#f1c40f','#2ecc71','#9b59b6']}] } });
+    const sorted = Object.keys(dias).sort();
+    chartFat = new Chart(document.getElementById('graficoFaturamento'), { type:'line', data:{ labels:sorted, datasets:[{label:'Faturamento', data:sorted.map(d=>dias[d]), borderColor:'#8bc34a', fill:true, backgroundColor:'rgba(139,195,74,0.2)'}] } });
+}
+
 async function renderizarTabela() {
     const tbody = document.getElementById('tabela-produtos');
-    const contador = document.getElementById('total-produtos-count');
-    
-    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Carregando...</td></tr>';
+    const count = document.getElementById('total-estoque-count');
+    tbody.innerHTML='<tr><td>Carregando...</td></tr>';
+    const q = await getDocs(produtosCollection);
+    tbody.innerHTML=''; let est=0;
+    q.forEach(d => {
+        const p = d.data(); est += parseInt(p.estoque)||0;
+        const tr = document.createElement('tr');
+        tr.innerHTML=`<td><img src="${p.img||''}" style="width:40px;height:40px;object-fit:cover;"></td><td>${p.nome}</td><td style="color:${p.estoque<5?'red':'green'}">${p.estoque}</td><td>R$ ${p.preco}</td><td><i class="fas fa-edit" id="ed-${d.id}" style="color:#2196f3;cursor:pointer;margin-right:10px;"></i><i class="fas fa-trash" id="dl-${d.id}" style="color:red;cursor:pointer;"></i></td>`;
+        tbody.appendChild(tr);
+        document.getElementById(`dl-${d.id}`).addEventListener('click', ()=>deletarProduto(d.id));
+        document.getElementById(`ed-${d.id}`).addEventListener('click', ()=>editarProduto(d.id));
+    });
+    count.innerText = est;
+}
 
-    try {
-        const querySnapshot = await getDocs(produtosCollection);
-        tbody.innerHTML = '';
-        
-        let count = 0;
-        querySnapshot.forEach((docSnap) => {
-            count++;
-            const prod = docSnap.data();
-            const id = docSnap.id;
-            
-            const tr = document.createElement('tr');
-            // Verifica se tem imagem
-            const imgDisplay = prod.img ? `<img src="${prod.img}" style="width:50px; height:50px; object-fit:cover; border-radius:4px;">` : '<i class="fas fa-image"></i>';
-
-            tr.innerHTML = `
-                <td>${imgDisplay}</td>
-                <td>${prod.nome}</td>
-                <td>R$ ${prod.preco}</td>
-                <td class="actions">
-                    <i class="fas fa-trash" id="btn-del-${id}" title="Excluir" style="cursor:pointer; color:red;"></i>
-                </td>
-            `;
-            tbody.appendChild(tr);
-
-            document.getElementById(`btn-del-${id}`).addEventListener('click', () => deletarProduto(id));
-        });
-
-        contador.innerText = count + " Itens";
-        if(count === 0) tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Nenhum produto cadastrado.</td></tr>';
-
-    } catch (error) {
-        console.error("Erro ao ler dados:", error);
+window.editarProduto = async (id) => {
+    const d = await getDoc(doc(db,"produtos",id));
+    if(d.exists()) {
+        const p = d.data();
+        document.getElementById('prod-id').value=id; document.getElementById('modal-titulo').innerText="Editar";
+        document.getElementById('prod-nome').value=p.nome; document.getElementById('prod-preco').value=p.preco;
+        document.getElementById('prod-estoque').value=p.estoque; document.getElementById('prod-cat').value=p.categoria||'Geral';
+        document.getElementById('prod-desc').value=p.descricao||'';
+        document.getElementById('modalProduto').style.display='flex';
     }
 }
 
-// 4. Salvar Produto (COM UPLOAD)
 document.getElementById('btn-save-prod').addEventListener('click', async function() {
+    const id = document.getElementById('prod-id').value;
     const nome = document.getElementById('prod-nome').value;
     const preco = document.getElementById('prod-preco').value;
-    const arquivoInput = document.getElementById('prod-img');
-    const arquivo = arquivoInput.files[0]; // Pega o arquivo selecionado
+    const est = document.getElementById('prod-estoque').value;
+    const cat = document.getElementById('prod-cat').value;
+    const desc = document.getElementById('prod-desc').value;
+    const arq = document.getElementById('prod-img').files[0];
     const btn = this;
 
-    if(nome && preco) {
-        try {
-            btn.innerText = "Salvando...";
-            btn.disabled = true;
-
-            let urlImagem = "";
-
-            // Se o usuário selecionou uma foto, faz o upload
-            if (arquivo) {
-                // Cria uma referência no Storage (ex: produtos/tenis.jpg)
-                const storageRef = ref(storage, `produtos/${new Date().getTime()}_${arquivo.name}`);
-                
-                // Sobe o arquivo
-                const snapshot = await uploadBytes(storageRef, arquivo);
-                
-                // Pega o link da internet para essa foto
-                urlImagem = await getDownloadURL(snapshot.ref);
-            }
-
-            // Salva no Banco de Dados com o link da foto
-            await addDoc(produtosCollection, {
-                nome: nome,
-                preco: parseFloat(preco),
-                img: urlImagem, // Salva a URL gerada pelo Firebase
-                dataCriacao: new Date()
-            });
-
-            alert('Produto salvo com sucesso!');
-            fecharModal();
-            renderizarTabela();
-
-        } catch (e) {
-            console.error("Erro ao salvar:", e);
-            alert("Erro ao salvar produto: " + e.message);
-        } finally {
-            btn.innerText = "Salvar";
-            btn.disabled = false;
+    if(!nome || !preco || !est) return alert("Preencha tudo!");
+    btn.innerText="..."; btn.disabled=true;
+    try {
+        let url = null;
+        if(arq) {
+            const s = await uploadBytes(ref(storage, `produtos/${Date.now()}_${arq.name}`), arq);
+            url = await getDownloadURL(s.ref);
         }
-    } else {
-        alert("Preencha nome e preço.");
-    }
+        const dados = { nome, preco:parseFloat(preco), estoque:parseInt(est), categoria:cat, descricao:desc };
+        if(url) dados.img = url; else if(!id) dados.img = "";
+
+        if(id) await updateDoc(doc(db,"produtos",id), dados);
+        else { dados.dataCriacao=new Date(); await addDoc(produtosCollection, dados); }
+        alert("Salvo!"); window.fecharModal(); renderizarTabela(); renderizarDashboard();
+    } catch(e) { console.error(e); alert("Erro."); }
+    finally { btn.innerText="Salvar"; btn.disabled=false; }
 });
 
-// 5. Deletar Produto
-async function deletarProduto(id) {
-    if(confirm('Tem certeza que deseja excluir?')) {
-        try {
-            await deleteDoc(doc(db, "produtos", id));
-            renderizarTabela();
-        } catch (e) {
-            console.error("Erro ao deletar:", e);
-        }
-    }
-}
-
-// 6. Logout
-document.getElementById('btn-logout').addEventListener('click', async (e) => {
-    e.preventDefault();
-    await signOut(auth);
-    window.location.href = "login.html";
-});
+function verDetalhes(p) { document.getElementById('conteudo-detalhes').innerHTML=`<p><strong>Cliente:</strong> ${p.cliente}</p><p>${p.endereco||''}</p><hr><ul>${p.itens.map(i=>`<li>${i.nome}</li>`).join('')}</ul><p>Total: R$ ${p.total.toFixed(2)}</p>`; document.getElementById('modalDetalhes').style.display='flex'; }
+window.abrirModalProduto = () => { document.getElementById('prod-id').value=""; document.getElementById('modal-titulo').innerText="Novo"; document.getElementById('prod-nome').value=""; document.getElementById('prod-preco').value=""; document.getElementById('prod-estoque').value=""; document.getElementById('prod-desc').value=""; document.getElementById('modalProduto').style.display='flex'; }
+window.fecharModal = () => document.getElementById('modalProduto').style.display='none';
+async function deletarProduto(id) { if(confirm('Apagar?')) { await deleteDoc(doc(db,"produtos",id)); renderizarTabela(); renderizarDashboard(); } }
+document.getElementById('btn-logout').addEventListener('click', async (e)=>{e.preventDefault(); await signOut(auth); window.location.href="login.html";});
