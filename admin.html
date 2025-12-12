@@ -24,7 +24,7 @@
     </nav>
 
     <main class="main-content">
-        <div class="header-admin"><h1>Painel</h1><div>Admin</div></div>
+        <div class="header-admin"><h1>Painel de Controle</h1><div>Olá, <strong>Administrador</strong></div></div>
 
         <div id="section-dashboard">
             <div class="kpi-container">
@@ -39,28 +39,37 @@
         </div>
 
         <div id="section-produtos" class="product-section" style="display: none;">
-            <div class="section-header"><h2>Gerenciar Produtos</h2><button class="btn-add" onclick="abrirModalProduto()">+ Novo Produto</button></div>
+            <div class="section-header">
+                <h2>Produtos</h2>
+                <div style="display:flex; gap:10px;">
+                    <input type="text" id="busca-produto-admin" placeholder="Buscar produto..." onkeyup="filtrarProdutosAdmin()" style="padding:8px; border:1px solid #ccc; border-radius:5px;">
+                    <button class="btn-add" onclick="abrirModalProduto()">+ Novo</button>
+                </div>
+            </div>
             <table><thead><tr><th>Img</th><th>Nome</th><th>Estoque</th><th>Preço</th><th>Ações</th></tr></thead><tbody id="tabela-produtos"></tbody></table>
         </div>
 
         <div id="section-pedidos" class="product-section" style="display: none;">
             <div class="section-header">
                 <h2>Pedidos</h2>
-                <select id="filtro-status" style="padding: 5px; border-radius: 5px;">
-                    <option value="Todos">Todos</option><option value="Recebido">Recebidos</option><option value="Enviado">Enviados</option><option value="Entregue">Entregues</option>
-                </select>
+                <div style="display:flex; gap:10px;">
+                    <button onclick="window.exportarPedidos()" style="padding:8px 15px; background:#27ae60; color:white; border:none; border-radius:5px; cursor:pointer;"><i class="fas fa-file-csv"></i> Exportar CSV</button>
+                    <select id="filtro-status" style="padding: 5px; border-radius: 5px;">
+                        <option value="Todos">Todos</option><option value="Recebido">Recebidos</option><option value="Enviado">Enviados</option><option value="Entregue">Entregues</option>
+                    </select>
+                </div>
             </div>
             <table><thead><tr><th>Data</th><th>Cliente</th><th>Total</th><th>Status</th><th>Detalhes</th></tr></thead><tbody id="tabela-pedidos"></tbody></table>
         </div>
 
         <div id="section-banners" class="product-section" style="display: none;">
-            <div class="section-header"><h2>Banners (Home)</h2><button class="btn-add" onclick="document.getElementById('modalBanner').style.display='flex'">+ Novo Banner</button></div>
+            <div class="section-header"><h2>Banners da Home</h2><button class="btn-add" onclick="document.getElementById('modalBanner').style.display='flex'">+ Novo Banner</button></div>
             <table><thead><tr><th>Imagem</th><th>Título</th><th>Subtítulo</th><th>Ações</th></tr></thead><tbody id="tabela-banners"></tbody></table>
         </div>
 
         <div id="section-cupons" class="product-section" style="display: none;">
             <div class="section-header"><h2>Cupons</h2><button class="btn-add" onclick="document.getElementById('modalCupom').style.display='flex'">+ Novo Cupom</button></div>
-            <table><thead><tr><th>Código</th><th>Desconto (%)</th><th>Ações</th></tr></thead><tbody id="tabela-cupons"></tbody></table>
+            <table><thead><tr><th>Código</th><th>Desc (%)</th><th>Validade</th><th>Ações</th></tr></thead><tbody id="tabela-cupons"></tbody></table>
         </div>
     </main>
 
@@ -74,13 +83,10 @@
                 <div style="flex:1;"><label>Preço Original (De):</label><input type="number" id="prod-preco-antigo" placeholder="Opcional"></div>
                 <div style="flex:1;"><label>Qtd:</label><input type="number" id="prod-estoque"></div>
             </div>
-            <label>Categoria:</label>
-            <select id="prod-cat" style="width:100%; padding:8px; margin:5px 0;">
-                <option value="Geral">Selecionar...</option><option value="Roupas">Roupas</option><option value="Calçados">Calçados</option><option value="Tecnologia">Tecnologia</option><option value="Esportes">Esportes</option>
-            </select>
-            <label>Descrição:</label><textarea id="prod-desc" rows="3" style="width:100%; padding:8px;"></textarea>
-            <div style="background: #f4f4f4; padding: 10px; margin-top: 10px;">
-                <p style="font-weight: bold; font-size: 12px;">Galeria (4 fotos):</p>
+            <label>Categoria:</label><select id="prod-cat" style="width:100%; padding:8px; margin:5px 0;"><option value="Geral">Selecionar...</option><option value="Roupas">Roupas</option><option value="Calçados">Calçados</option><option value="Tecnologia">Tecnologia</option><option value="Esportes">Esportes</option></select>
+            <label>Descrição:</label><textarea id="prod-desc" rows="3" style="width:100%; padding:8px; border:1px solid #ddd;"></textarea>
+            <div style="background: #f4f4f4; padding: 10px; margin-top: 10px; border-radius: 5px;">
+                <p style="font-weight: bold; font-size: 12px; margin-bottom:5px;">Galeria (4 fotos):</p>
                 <input type="file" id="img-1" accept="image/*"><br><input type="file" id="img-2" accept="image/*"><br><input type="file" id="img-3" accept="image/*"><br><input type="file" id="img-4" accept="image/*">
             </div>
             <div class="modal-buttons"><button id="btn-save-prod" class="btn-save">Salvar</button><button onclick="fecharModal()" class="btn-cancel">Cancelar</button></div>
@@ -90,20 +96,23 @@
     <div id="modalBanner" class="modal-overlay" style="display: none;">
         <div class="modal-content">
             <h3>Novo Banner</h3>
-            <label>Título:</label><input type="text" id="banner-titulo">
-            <label>Subtítulo:</label><input type="text" id="banner-sub">
-            <label>Imagem:</label><input type="file" id="banner-img" accept="image/*">
+            <label>Título:</label><input type="text" id="banner-titulo" placeholder="Ex: Ofertas de Verão">
+            <label>Subtítulo:</label><input type="text" id="banner-sub" placeholder="Ex: Até 50% OFF">
+            <label>Imagem (Larga):</label><input type="file" id="banner-img" accept="image/*">
             <div class="modal-buttons"><button id="btn-save-banner" class="btn-save">Salvar</button><button onclick="document.getElementById('modalBanner').style.display='none'" class="btn-cancel">Cancelar</button></div>
         </div>
     </div>
+
     <div id="modalCupom" class="modal-overlay" style="display: none;">
         <div class="modal-content">
             <h3>Novo Cupom</h3>
-            <label>Código:</label><input type="text" id="cupom-code" style="text-transform:uppercase;">
-            <label>Desconto (%):</label><input type="number" id="cupom-val">
+            <label>Código:</label><input type="text" id="cupom-code" placeholder="Ex: NATAL10" style="text-transform:uppercase;">
+            <label>Desconto (%):</label><input type="number" id="cupom-val" placeholder="Ex: 10">
+            <label>Validade:</label><input type="date" id="cupom-validade">
             <div class="modal-buttons"><button id="btn-save-cupom" class="btn-save">Salvar</button><button onclick="document.getElementById('modalCupom').style.display='none'" class="btn-cancel">Cancelar</button></div>
         </div>
     </div>
+
     <div id="modalDetalhes" class="modal-overlay" style="display: none;"><div class="modal-content" style="width: 500px;"><h3>Detalhes</h3><div id="conteudo-detalhes" style="text-align: left;"></div><button onclick="document.getElementById('modalDetalhes').style.display='none'" class="btn-cancel" style="margin-top:20px; width:100%;">Fechar</button></div></div>
 
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>

@@ -10,7 +10,7 @@
     <script type="importmap"> { "imports": { "firebase/app": "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js", "firebase/auth": "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js", "firebase/firestore": "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js", "firebase/storage": "https://www.gstatic.com/firebasejs/10.13.0/firebase-storage.js" } } </script>
 </head>
 <body>
-    <div id="loading-overlay" class="loading-overlay"><div class="spinner"></div></div>
+    <div id="loading-overlay" class="loading-overlay"><div class="spinner"></div><p>Carregando...</p></div>
     
     <a href="https://wa.me/5511999999999" target="_blank" class="whatsapp-float"><i class="fab fa-whatsapp"></i></a>
     <div class="scroll-top-btn" onclick="window.scrollTo({top:0, behavior:'smooth'})"><i class="fas fa-arrow-up"></i></div>
@@ -24,10 +24,10 @@
             <a href="#" onclick="filtrarCategoria('Calçados')">Calçados</a>
             <a href="#" onclick="filtrarCategoria('Tecnologia')">Tech</a>
         </div>
-        <div class="search-bar"><input type="text" id="campo-busca" placeholder="O que você procura?"><i class="fas fa-search"></i></div>
+        <div class="search-bar"><input type="text" id="campo-busca" placeholder="Buscar..."><i class="fas fa-search"></i></div>
         <div class="user-actions">
             <i class="fas fa-moon" id="theme-toggle" onclick="toggleTheme()" style="cursor:pointer;" title="Modo Escuro"></i>
-            <a href="login.html"><i class="far fa-user"></i></a>
+            <a href="perfil.html" id="link-perfil" title="Minha Conta"><i class="far fa-user"></i></a>
             <a href="#" onclick="filtrarFavoritos()" title="Favoritos"><i class="far fa-heart"></i></a>
             <div style="position:relative;cursor:pointer;" onclick="toggleCarrinho()"><i class="fas fa-shopping-cart"></i><span id="cart-count" style="position:absolute;top:-8px;right:-8px;background:red;color:white;border-radius:50%;padding:2px 5px;font-size:10px;">0</span></div>
         </div>
@@ -35,35 +35,29 @@
 
     <main>
         <section class="carousel-section">
-            <div class="slider-container" id="slider">
-                <div class="slide" style="background:#2c3e50;"><h2>Bem-vindo à L&stON</h2></div>
+            <div class="slider-container" id="slider"><div class="slide" style="background:#2c3e50;"><h2>Bem-vindo à L&stON</h2></div></div>
+            <button class="slider-btn prev-btn" onclick="mudarSlide(-1)">&#10094;</button><button class="slider-btn next-btn" onclick="mudarSlide(1)">&#10095;</button>
+        </section>
+
+        <div class="filter-container">
+            <div>
+                <input type="number" id="price-min" placeholder="Min" class="filter-input">
+                <input type="number" id="price-max" placeholder="Max" class="filter-input">
+                <button onclick="filtrarPorPreco()" class="filter-btn">Filtrar</button>
             </div>
-            <button class="slider-btn prev-btn" onclick="mudarSlide(-1)">&#10094;</button>
-            <button class="slider-btn next-btn" onclick="mudarSlide(1)">&#10095;</button>
-        </section>
-
-        <section class="categories-section">
-            <div class="category-item" onclick="filtrarCategoria('Todas')"><div class="circle"><i class="fas fa-border-all"></i></div><span>Todas</span></div>
-            <div class="category-item" onclick="filtrarCategoria('Roupas')"><div class="circle"><i class="fas fa-tshirt"></i></div><span>Roupas</span></div>
-            <div class="category-item" onclick="filtrarCategoria('Calçados')"><div class="circle"><i class="fas fa-shoe-prints"></i></div><span>Calçados</span></div>
-            <div class="category-item" onclick="filtrarCategoria('Tecnologia')"><div class="circle"><i class="fas fa-laptop"></i></div><span>Tech</span></div>
-        </section>
-
-        <div class="filter-bar">
-            <select id="sort-select" onchange="ordenarProdutos()">
-                <option value="padrao">Ordenar por: Padrão</option>
+            <select id="sort-select" onchange="ordenarProdutos()" class="filter-select">
+                <option value="padrao">Ordenar: Padrão</option>
                 <option value="menor">Menor Preço</option>
                 <option value="maior">Maior Preço</option>
             </select>
         </div>
 
-        <h2 style="text-align:center; margin-bottom: 20px;" id="titulo-secao">Destaques</h2>
         <section class="products-section" id="products-container"><p>Carregando...</p></section>
     </main>
 
     <div class="newsletter">
         <h3>Receba Ofertas Exclusivas</h3>
-        <p>Cadastre-se e ganhe descontos.</p>
+        <p style="margin-bottom:10px;">Cadastre-se e ganhe descontos.</p>
         <div style="display:flex; justify-content:center; gap:10px;">
             <input type="email" id="news-email" placeholder="Seu e-mail">
             <button onclick="assinarNews()">Cadastrar</button>
@@ -82,7 +76,7 @@
                 <div style="flex:1; overflow-y:auto;">
                     <p>Entrega:</p>
                     <div style="display:flex; gap:5px; margin-bottom:10px;">
-                        <input type="text" id="check-cep" placeholder="CEP" onblur="buscarCep()">
+                        <input type="text" id="check-cep" placeholder="CEP" oninput="mascaraCep(this)" onblur="buscarCep()" maxlength="9">
                         <button onclick="buscarCep()" style="padding:0 10px; cursor:pointer;">Busca</button>
                     </div>
                     <input type="text" id="check-endereco" placeholder="Endereço">

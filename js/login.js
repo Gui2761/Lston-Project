@@ -1,13 +1,13 @@
 import { auth } from "./firebaseConfig.js";
-import { signInWithEmailAndPassword } from "firebase/auth";
+import { signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
+
+const notify = (msg, type) => Toastify({ text: msg, style: { background: type==='error'?"#c62828":"#2c3e50" } }).showToast();
 
 document.getElementById('loginForm').addEventListener('submit', async function(e) {
     e.preventDefault();
     const email = document.getElementById('email').value;
     const password = document.getElementById('password').value;
     const btn = this.querySelector('button');
-
-    const notify = (msg, type) => Toastify({ text: msg, style: { background: type==='error'?"#c62828":"#2c3e50" } }).showToast();
 
     try {
         btn.innerText = "..."; btn.disabled = true;
@@ -18,8 +18,19 @@ document.getElementById('loginForm').addEventListener('submit', async function(e
             else window.location.href = 'index.html';
         }, 1000);
     } catch (error) {
-        console.error(error);
         notify("Erro no login. Verifique seus dados.", "error");
         btn.innerText = "Entrar"; btn.disabled = false;
     }
 });
+
+window.recuperarSenha = async () => {
+    const email = prompt("Digite seu e-mail para recuperar a senha:");
+    if(email) {
+        try {
+            await sendPasswordResetEmail(auth, email);
+            notify("E-mail de recuperação enviado!", "success");
+        } catch(e) {
+            notify("Erro ao enviar e-mail. Verifique o endereço.", "error");
+        }
+    }
+}

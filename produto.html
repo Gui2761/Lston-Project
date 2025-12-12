@@ -10,22 +10,27 @@
     <script type="importmap"> { "imports": { "firebase/app": "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js", "firebase/auth": "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js", "firebase/firestore": "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js", "firebase/storage": "https://www.gstatic.com/firebasejs/10.13.0/firebase-storage.js" } } </script>
 </head>
 <body>
-    <header>...</header>
+    <header>
+        <div class="logo"><a href="index.html">L&st<span>ON</span></a></div>
+        <div class="search-bar"><input type="text" placeholder="Buscar..."><i class="fas fa-search"></i></div>
+        <div class="user-actions"><a href="login.html"><i class="far fa-user"></i></a><a href="index.html"><i class="fas fa-shopping-cart"></i></a></div>
+    </header>
 
     <main>
         <div id="product-detail-container"><p style="text-align:center; padding:50px;">Carregando...</p></div>
-
         <div style="max-width: 1200px; margin: 0 auto; padding: 20px;">
             <div class="reviews-section">
-                <h3>Avaliações dos Clientes</h3>
+                <h3>Avaliações</h3>
                 <div class="review-form">
-                    <p>Deixe sua avaliação:</p>
+                    <p>Sua nota:</p>
                     <select id="rev-stars" style="padding:5px;"><option value="5">★★★★★</option><option value="4">★★★★</option></select>
-                    <textarea id="rev-text" placeholder="O que achou?"></textarea>
-                    <button class="btn-share" style="width:auto; margin-top:10px;" onclick="enviarReview()">Enviar Avaliação</button>
+                    <textarea id="rev-text" placeholder="Comente..."></textarea>
+                    <button class="btn-share" style="width:auto; margin-top:10px;" onclick="enviarReview()">Enviar</button>
                 </div>
                 <div id="reviews-list" style="margin-top:20px;"></div>
             </div>
+            <h2 style="margin-top: 50px; border-top: 1px solid #ddd; padding-top: 20px;">Relacionados:</h2>
+            <section class="products-section" id="related-container" style="justify-content: flex-start; margin-top: 20px;"></section>
         </div>
     </main>
 
