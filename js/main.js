@@ -11,13 +11,25 @@ async function carregarLoja() {
     try {
         const querySnapshot = await getDocs(collection(db, "produtos"));
         todosProdutos = []; 
-        if (querySnapshot.empty) { container.innerHTML = '<div style="text-align:center; padding: 20px;">Nada encontrado.</div>'; return; }
-        querySnapshot.forEach((documento) => { todosProdutos.push({ id: documento.id, ...documento.data() }); });
+        
+        if (querySnapshot.empty) {
+            container.innerHTML = '<div style="text-align:center; padding: 20px;">Nenhum produto cadastrado.</div>';
+            return;
+        }
+
+        querySnapshot.forEach((documento) => {
+            todosProdutos.push({ id: documento.id, ...documento.data() });
+        });
+
         exibirProdutos(todosProdutos);
-    } catch (error) { console.error(error); container.innerHTML = '<p>Erro ao carregar.</p>'; }
+
+    } catch (error) {
+        console.error("Erro:", error);
+        container.innerHTML = '<p>Erro ao carregar loja.</p>';
+    }
 }
 
-// --- 2. Exibir Produtos ---
+// --- 2. Exibir Produtos (Cards) ---
 function exibirProdutos(lista) {
     container.innerHTML = ''; 
     if(lista.length === 0) { container.innerHTML = '<p style="text-align:center; width:100%;">Nada encontrado.</p>'; return; }
@@ -25,14 +37,22 @@ function exibirProdutos(lista) {
     lista.forEach(prod => {
         const card = document.createElement('div');
         card.className = 'product-card';
-        const imgUrl = prod.img ? prod.img : 'https://via.placeholder.com/150?text=Sem+Foto';
+        
+        // CORREÇÃO: Pega a primeira imagem válida da lista
+        let capa = 'https://via.placeholder.com/150?text=Sem+Foto';
+        if (prod.imagens && prod.imagens.length > 0) {
+            capa = prod.imagens[0];
+        } else if (prod.img) {
+            capa = prod.img; // Compatibilidade com antigos
+        }
+
         const estoque = prod.estoque ? parseInt(prod.estoque) : 0;
         const semEstoque = estoque === 0;
         const textoEstoque = semEstoque ? '<span style="color:red;">Esgotado</span>' : `Restam: ${estoque}`;
         const btnDisabled = semEstoque ? 'disabled style="background-color:#ccc; cursor:not-allowed;"' : '';
 
         card.innerHTML = `
-            <div class="product-img" style="background-image: url('${imgUrl}'); cursor: pointer;" onclick="window.location.href='produto.html?id=${prod.id}'">
+            <div class="product-img" style="background-image: url('${capa}'); cursor: pointer;" onclick="window.location.href='produto.html?id=${prod.id}'">
                 <span style="position:absolute; top:5px; left:5px; background:rgba(0,0,0,0.6); color:white; padding:2px 6px; font-size:10px; border-radius:4px;">${prod.categoria || 'Geral'}</span>
             </div>
             <div style="width:100%;">
@@ -43,6 +63,7 @@ function exibirProdutos(lista) {
             <button class="btn-comprar" ${btnDisabled}>${semEstoque ? 'Indisponível' : 'Adicionar'}</button>
         `;
         container.appendChild(card);
+        
         if(!semEstoque) {
             card.querySelector('.btn-comprar').addEventListener('click', () => adicionarAoCarrinho(prod));
         }
@@ -62,10 +83,23 @@ document.getElementById('campo-busca').addEventListener('input', (e) => {
 // --- 4. Carrinho ---
 function adicionarAoCarrinho(produto) {
     const qtdNoCarrinho = carrinho.filter(p => p.id === produto.id).length;
+    
+    // Define a imagem de capa para o item do carrinho
+    let imgCapa = 'https://via.placeholder.com/50';
+    if(produto.imagens && produto.imagens.length > 0) imgCapa = produto.imagens[0];
+    else if(produto.img) imgCapa = produto.img;
+
+    const itemParaCarrinho = { ...produto, img: imgCapa };
+
     if(qtdNoCarrinho >= produto.estoque) { alert("Limite de estoque atingido!"); return; }
-    carrinho.push(produto); salvarCarrinho(); atualizarCarrinhoUI();
+    
+    carrinho.push(itemParaCarrinho);
+    salvarCarrinho();
+    atualizarCarrinhoUI();
+    // Abre o carrinho
     if(document.getElementById('carrinho-modal').style.display !== 'flex') toggleCarrinho();
 }
+
 window.removerDoCarrinho = (index) => { carrinho.splice(index, 1); salvarCarrinho(); atualizarCarrinhoUI(); }
 function salvarCarrinho() { localStorage.setItem('lston_carrinho', JSON.stringify(carrinho)); }
 
@@ -75,15 +109,21 @@ function atualizarCarrinhoUI() {
     const lista = document.getElementById('itens-carrinho');
     let total = 0;
     lista.innerHTML = '';
-    if (carrinho.length === 0) { lista.innerHTML = '<p style="text-align:center; margin-top:20px; color:#777;">Vazio.</p>'; } 
-    else {
+
+    if (carrinho.length === 0) { 
+        lista.innerHTML = '<p style="text-align:center; margin-top:20px; color:#777;">Seu carrinho está vazio.</p>'; 
+    } else {
         carrinho.forEach((item, index) => {
             total += parseFloat(item.preco);
+            // CORREÇÃO: Estilo INLINE para forçar 50px de largura
             lista.innerHTML += `
                 <div class="cart-item">
                     <div style="display:flex; align-items:center;">
-                        <img src="${item.img || 'https://via.placeholder.com/50'}" alt="${item.nome}">
-                        <div class="item-info"><strong>${item.nome}</strong><br>R$ ${item.preco}</div>
+                        <img src="${item.img}" alt="${item.nome}" style="width:50px; height:50px; min-width:50px; object-fit:cover; border-radius:4px; margin-right:10px;">
+                        <div class="item-info">
+                            <strong style="font-size:14px;">${item.nome}</strong><br>
+                            <span style="font-size:12px; color:#888;">R$ ${item.preco}</span>
+                        </div>
                     </div>
                     <i class="fas fa-trash item-remove" onclick="removerDoCarrinho(${index})"></i>
                 </div>`;
@@ -94,7 +134,7 @@ function atualizarCarrinhoUI() {
     document.getElementById('checkout-total-display').innerText = totalFormatado;
 }
 
-// --- 5. Checkout ---
+// --- 5. Checkout e Navegação ---
 window.irParaCheckout = function() {
     if(carrinho.length === 0) return alert("Carrinho vazio!");
     document.getElementById('etapa-carrinho').style.display = 'none';
