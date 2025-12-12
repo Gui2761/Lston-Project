@@ -12,9 +12,13 @@ const firebaseConfig = {
   appId: "1:918065694492:web:bb3bb3cad2dba2d5899cd9"
 };
 
+// 1. Inicializa o App
 const app = initializeApp(firebaseConfig);
+
+// 2. Inicializa os Serviços (ISSO FALTAVA NO SEU PRINT)
 const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
 
+// 3. Exporta para os outros arquivos usarem (ISSO TAMBÉM FALTAVA)
 export { app, auth, db, storage };

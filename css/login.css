@@ -1,18 +1,77 @@
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap');
-body { background-color: #f0f2f5; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; font-family: 'Poppins', sans-serif; color: #333; }
+
+/* --- VARIÁVEIS DE TEMA --- */
+:root {
+    --bg-body: #f0f2f5;
+    --bg-card: #ffffff;
+    --text-main: #333333;
+    --text-muted: #888888;
+    --accent: #2c3e50;
+    --accent-hover: #8bc34a;
+    --border: #eeeeee;
+    --shadow: 0 10px 40px rgba(0,0,0,0.08);
+}
+
+[data-theme="dark"] {
+    --bg-body: #121212;
+    --bg-card: #1e1e1e;
+    --text-main: #e0e0e0;
+    --text-muted: #aaaaaa;
+    --accent: #8bc34a; /* Verde no escuro */
+    --accent-hover: #2ecc71;
+    --border: #333333;
+    --shadow: 0 10px 40px rgba(0,0,0,0.3);
+}
+
+/* --- ESTILOS --- */
+* { box-sizing: border-box; font-family: 'Poppins', sans-serif; }
+
+body {
+    background-color: var(--bg-body);
+    display: flex; justify-content: center; align-items: center;
+    height: 100vh; margin: 0; color: var(--text-main);
+    transition: background 0.3s, color 0.3s;
+}
+
 .login-container { width: 100%; display: flex; justify-content: center; padding: 20px; }
-.login-box { background: white; padding: 50px 40px; border-radius: 16px; box-shadow: 0 10px 40px rgba(0,0,0,0.08); text-align: center; width: 100%; max-width: 400px; }
-.login-box h2 { margin-bottom: 5px; color: #2c3e50; font-weight: 700; font-size: 28px; }
-.login-box h2 span { color: #8bc34a; }
-.login-box p { color: #888; font-size: 14px; margin-bottom: 30px; }
+
+.login-box {
+    background: var(--bg-card); padding: 50px 40px; border-radius: 16px;
+    box-shadow: var(--shadow); text-align: center; width: 100%; max-width: 400px;
+    transition: background 0.3s;
+}
+
+.login-box h2 { margin-bottom: 5px; color: var(--text-main); font-weight: 700; font-size: 28px; }
+.login-box h2 span { color: var(--accent-hover); }
+.login-box p { color: var(--text-muted); font-size: 14px; margin-bottom: 30px; }
+
 .input-group { text-align: left; margin-bottom: 20px; }
-.input-group label { display: block; margin-bottom: 8px; font-size: 13px; font-weight: 600; color: #555; }
-.input-group input { width: 100%; padding: 12px 15px; border: 2px solid #eee; border-radius: 8px; outline: none; font-size: 14px; transition: 0.3s; }
-.input-group input:focus { border-color: #2c3e50; }
-button { width: 100%; padding: 15px; background: #2c3e50; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: 600; transition: 0.3s; margin-top: 10px; }
-button:hover { background: #8bc34a; transform: translateY(-2px); box-shadow: 0 5px 15px rgba(139, 195, 74, 0.3); }
-.switch-page { margin-top: 25px; font-size: 13px; color: #666; }
-.switch-page a { color: #2c3e50; font-weight: bold; text-decoration: none; margin-left: 5px; }
-.switch-page a:hover { text-decoration: underline; }
-.back-link { margin-top: 20px; display: block; font-size: 12px; color: #aaa; text-decoration: none; }
-.back-link:hover { color: #333; }
+.input-group label { display: block; margin-bottom: 8px; font-size: 13px; font-weight: 600; color: var(--text-main); }
+
+.input-group input {
+    width: 100%; padding: 12px 15px; border: 2px solid var(--border);
+    border-radius: 8px; outline: none; font-size: 14px; transition: 0.3s;
+    background: var(--bg-body); color: var(--text-main);
+}
+.input-group input:focus { border-color: var(--accent); }
+
+button {
+    width: 100%; padding: 15px; background: var(--accent);
+    color: white; border: none; border-radius: 8px;
+    cursor: pointer; font-size: 16px; font-weight: 600; transition: 0.3s;
+    margin-top: 10px;
+}
+button:hover { background: var(--accent-hover); transform: translateY(-2px); }
+
+.switch-page { margin-top: 25px; font-size: 13px; color: var(--text-muted); }
+.switch-page a { color: var(--accent); font-weight: bold; text-decoration: none; margin-left: 5px; }
+.switch-page a:hover { text-decoration: underline; color: var(--accent-hover); }
+
+.back-link { margin-top: 20px; display: block; font-size: 12px; color: var(--text-muted); text-decoration: none; }
+.back-link:hover { color: var(--text-main); }
+
+/* Toggle Theme no Login */
+.theme-toggle-login {
+    position: absolute; top: 20px; right: 20px; cursor: pointer;
+    font-size: 24px; color: var(--text-main);
+}
