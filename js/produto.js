@@ -6,7 +6,6 @@ const produtoId = urlParams.get('id');
 const container = document.getElementById('product-detail-container');
 const relatedContainer = document.getElementById('related-container');
 
-// UX Helpers
 function showToast(msg) { Toastify({ text: msg, duration: 3000, gravity: "top", position: "right", style: { background: "#2c3e50" } }).showToast(); }
 function fmtMoney(val) { return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val); }
 
@@ -24,11 +23,7 @@ async function carregarProduto() {
 }
 
 function renderizarLayoutNovo(prod) {
-    let imagens = [];
-    if (prod.imagens && prod.imagens.length > 0) imagens = prod.imagens;
-    else if (prod.img) imagens = [prod.img];
-    else imagens = ['https://via.placeholder.com/500?text=Sem+Foto'];
-
+    let imagens = (prod.imagens && prod.imagens.length > 0) ? prod.imagens : [(prod.img || 'https://via.placeholder.com/500?text=Sem+Foto')];
     let thumbsHtml = '';
     imagens.forEach((url, index) => {
         const borderStyle = index === 0 ? '2px solid #2c3e50' : '2px solid #eee';
@@ -36,7 +31,7 @@ function renderizarLayoutNovo(prod) {
     });
 
     const est = parseInt(prod.estoque) || 0;
-    const btnDisabled = est === 0 ? 'disabled style="background:#ccc;cursor:not-allowed;width:100%;padding:20px;border:none;font-weight:bold;"' : 'style="background:#2c3e50;color:white;width:100%;padding:20px;border:none;font-weight:bold;cursor:pointer;"';
+    const btnDisabled = est === 0 ? 'disabled style="background:#ccc;cursor:not-allowed;"' : '';
 
     container.innerHTML = `
         <div class="product-page-container" style="max-width:1200px;margin:0 auto;padding:20px;">
@@ -51,14 +46,22 @@ function renderizarLayoutNovo(prod) {
                 <div class="details-col" style="flex:1;min-width:300px;display:flex;flex-direction:column;gap:20px;">
                     <div class="prod-desc-box">
                         <h3 style="margin-bottom:10px;">Descrição</h3>
-                        <p style="color:#555;line-height:1.6;white-space:pre-wrap;word-wrap:break-word;word-break:break-word;overflow-wrap:break-word;max-width:100%;">${prod.descricao || 'Sem descrição.'}</p>
+                        <p style="color:#555;line-height:1.6;white-space:pre-wrap;word-wrap:break-word;">${prod.descricao || 'Sem descrição.'}</p>
                     </div>
                     <div><p style="font-size:14px;color:#777;">Preço:</p><div style="font-size:42px;color:#333;font-weight:bold;">${fmtMoney(prod.preco)}</div></div>
                     <p><strong>Estoque:</strong> ${est} un.</p>
-                    <button id="btn-add-cart" ${btnDisabled}>${est===0?'Esgotado':'Adicionar ao Carrinho'}</button>
-                    <button onclick="window.open('https://wa.me/5511999999999?text=Olá, tenho interesse no ${prod.nome}', '_blank')" class="btn-whatsapp">
-                        <i class="fab fa-whatsapp"></i> Comprar pelo WhatsApp
-                    </button>
+                    
+                    <button id="btn-add-cart" class="btn-buy-big" ${btnDisabled}>${est===0?'Esgotado':'Adicionar ao Carrinho'}</button>
+                    <button onclick="window.open('https://wa.me/5511999999999?text=Olá, interesse no ${prod.nome}', '_blank')" class="btn-whatsapp"><i class="fab fa-whatsapp"></i> Comprar no WhatsApp</button>
+
+                    <div class="shipping-calc">
+                        <label style="font-size:14px; font-weight:bold;">Calcular Frete:</label>
+                        <div class="shipping-input-group">
+                            <input type="text" id="cep-input" placeholder="Digite seu CEP" maxlength="8">
+                            <button onclick="calcularFrete()">Calcular</button>
+                        </div>
+                        <div id="frete-resultado" class="shipping-result"></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -80,6 +83,19 @@ window.trocarImagem = function(url, elemento) {
     if(mainImg) mainImg.src = url;
     document.querySelectorAll('.thumb-box').forEach(el => el.style.border = '2px solid #eee');
     if(elemento) elemento.style.border = '2px solid #2c3e50';
+}
+
+window.calcularFrete = function() {
+    const cep = document.getElementById('cep-input').value;
+    const res = document.getElementById('frete-resultado');
+    if(cep.length !== 8) { res.innerText = "CEP inválido."; res.style.color = "red"; return; }
+    res.style.color = "#333";
+    res.innerText = "Calculando...";
+    setTimeout(() => {
+        const valor = (Math.random() * 20 + 10).toFixed(2);
+        const dias = Math.floor(Math.random() * 5 + 2);
+        res.innerHTML = `Frete Econômico: R$ ${valor} <br> Prazo: ${dias} dias úteis`;
+    }, 1000);
 }
 
 async function carregarRelacionados(cat) {
