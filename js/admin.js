@@ -57,14 +57,18 @@ function initDragAndDrop() {
     
     if(!dropZone || !input) return;
 
+    // Clique na zona abre o seletor
     dropZone.addEventListener('click', () => input.click());
     
     input.addEventListener('change', () => {
         handleFiles(Array.from(input.files));
     });
     
+    // Efeitos visuais
     dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
     dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+    
+    // Soltar arquivos
     dropZone.addEventListener('drop', (e) => {
         e.preventDefault();
         dropZone.classList.remove('drag-over');
@@ -124,7 +128,7 @@ sections.forEach(s => {
     }
 });
 
-// --- DASHBOARD (ATUALIZADO COM FILTRO E ALERTAS) ---
+// --- DASHBOARD (COM FILTRO E ALERTAS) ---
 async function renderizarDashboard() {
     const filtroData = document.getElementById('filtro-data-dashboard')?.value || 'total';
     const q = await getDocs(pedidosCollection);
@@ -136,7 +140,7 @@ async function renderizarDashboard() {
         const p = d.data(); p.id = d.id; 
         const dataPedido = new Date(p.data).toLocaleDateString('pt-BR');
         
-        // Lógica do Filtro de Data
+        // Filtro de Data
         if (filtroData === 'hoje' && dataPedido !== hoje) return;
 
         todosPedidosCache.push(p);
@@ -164,7 +168,7 @@ async function renderizarDashboard() {
 }
 
 async function verificarEstoqueCritico() {
-    // Reutiliza cache se possível, ou busca novos
+    // Se cache vazio, busca produtos
     if(todosProdutosCache.length === 0) await renderizarTabela();
     
     const criticos = todosProdutosCache.filter(p => (parseInt(p.estoque)||0) <= 5).map(p => p.nome);
@@ -283,7 +287,7 @@ document.getElementById('btn-save-prod').addEventListener('click', async functio
         if(id) { 
             const docSnap = await getDoc(doc(db, "produtos", id));
             let imagensAtuais = docSnap.exists() ? (docSnap.data().imagens || []) : [];
-            // Se fez upload de novas, usa as novas. Se não, mantém as antigas.
+            // Se subiu novas, substitui. Se não, mantém antigas.
             if(urls.length > 0) { dados.imagens = urls; } else { dados.imagens = imagensAtuais; }
             await updateDoc(doc(db,"produtos",id), dados); 
         } else { 

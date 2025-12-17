@@ -6,9 +6,20 @@ let carrinho = JSON.parse(localStorage.getItem('lston_carrinho')) || [];
 let favoritos = JSON.parse(localStorage.getItem('lston_favoritos')) || [];
 let todosProdutos = []; 
 let desconto = 0;
-let freteValor = 0; // NOVA VARIAVEL PARA FRETE
+let freteValor = 0; // Valor do frete calculado
 let currentUserEmail = null;
 const container = document.getElementById('products-container');
+
+// --- TABELA DE FRETE REAL (Por Estado) ---
+const TABELA_FRETE = {
+    'SP': { base: 12.00, adicional: 1.00, prazo: '2-4 dias' },
+    'RJ': { base: 15.00, adicional: 1.50, prazo: '3-5 dias' },
+    'MG': { base: 16.00, adicional: 1.50, prazo: '3-6 dias' },
+    'ES': { base: 18.00, adicional: 2.00, prazo: '4-7 dias' },
+    'SUL': { base: 22.00, adicional: 2.50, prazo: '5-8 dias' }, // PR, SC, RS
+    'NORDESTE': { base: 28.00, adicional: 3.00, prazo: '8-12 dias' },
+    'PADRAO': { base: 35.00, adicional: 5.00, prazo: '10-15 dias' } // Resto do Brasil
+};
 
 // --- HELPERS ---
 window.showToast = (msg, type='success') => { if(typeof Toastify !== 'undefined') Toastify({ text: msg, duration: 3000, style: { background: type==='error'?"#e74c3c":"#2c3e50" } }).showToast(); else alert(msg); }
@@ -40,7 +51,7 @@ onAuthStateChanged(auth, (user) => {
     }
 });
 
-// --- LÓGICA DE BUSCA APROXIMADA (FUZZY SEARCH) ---
+// --- LÓGICA DE BUSCA INTELIGENTE (FUZZY SEARCH) ---
 function calcularSimilaridade(s1, s2) {
     let longer = s1.length < s2.length ? s2 : s1;
     let shorter = s1.length < s2.length ? s1 : s2;
@@ -82,7 +93,9 @@ if (campoBusca) {
         const filtrados = todosProdutos.filter(p => {
             const nome = p.nome.toLowerCase();
             const cat = (p.categoria || "").toLowerCase();
+            // 1. Busca exata
             if (nome.includes(termo) || cat.includes(termo)) return true;
+            // 2. Busca aproximada (Fuzzy)
             if (termo.length > 3) {
                 const palavrasNome = nome.split(" ");
                 return palavrasNome.some(palavra => calcularSimilaridade(palavra, termo) > 0.7);
@@ -100,7 +113,7 @@ async function carregarBanners() {
     try {
         const q = await getDocs(collection(db, "banners"));
         const c = document.getElementById('slider');
-        if (q.empty) return; 
+        if (q.empty || !c) return; 
         let h=''; 
         q.forEach(d=>{const b=d.data(); h+=`<div class="slide" style="background-image: url('${b.img}');"><div class="slide-content"><h2>${b.titulo}</h2><p>${b.subtitulo}</p></div></div>`;}); 
         c.innerHTML=h; 
@@ -130,9 +143,6 @@ async function carregarLoja() {
 function exibirProdutos(lista) {
     if(!container) return;
     container.innerHTML = ''; 
-    const seteDiasMs = 7 * 24 * 60 * 60 * 1000;
-    const agora = new Date().getTime();
-
     if(lista.length === 0) {
         container.innerHTML = '<p style="text-align:center; width:100%; padding:20px;">Nenhum produto encontrado.</p>';
         return;
@@ -154,15 +164,12 @@ function exibirProdutos(lista) {
             leftPos += 70;
         }
 
-        let badgeNewHtml = (prod.dataCriacao && (agora - prod.dataCriacao.seconds * 1000) < seteDiasMs) ? `<div class="badge-new" style="left:${leftPos}px">Novo</div>` : '';
-        let stockHtml = (est > 0 && est < 5) ? `<span class="badge-stock">Restam ${est}!</span>` : '';
         const heartClass = favoritos.includes(prod.id) ? 'fas fa-heart fav-btn active' : 'far fa-heart fav-btn';
 
-        card.innerHTML = `${badgeOffHtml} ${badgeNewHtml} <i class="${heartClass}" onclick="toggleFavorito('${prod.id}', this, event)"></i>
+        card.innerHTML = `${badgeOffHtml} <i class="${heartClass}" onclick="toggleFavorito('${prod.id}', this, event)"></i>
             <div class="product-img" style="background-image: url('${capa}'); cursor: pointer;" onclick="window.location.href='produto.html?id=${prod.id}'"></div>
             <div style="width:100%;">
                 <h3>${prod.nome}</h3>
-                ${stockHtml}
                 <div class="price-box">${priceHtml}</div>
                 <div class="card-qty-selector">
                     <button class="card-qty-btn" onclick="alterarQtdCard(this, -1)">-</button>
@@ -175,7 +182,7 @@ function exibirProdutos(lista) {
     });
 }
 
-// --- FUNÇÕES DE QUANTIDADE E CARRINHO (A Lógica Robusta) ---
+// --- FUNÇÕES DE QUANTIDADE E CARRINHO ---
 window.alterarQtdCard = (btn, delta) => {
     const input = btn.parentNode.querySelector('input');
     let val = parseInt(input.value) + delta;
@@ -202,11 +209,13 @@ function adicionarAoCarrinho(produto, qtd = 1) {
     }
 
     let capa = (produto.imagens && produto.imagens.length > 0) ? produto.imagens[0] : (produto.img || '');
+    
     if(itemExistente) {
         itemExistente.qtd += qtd;
     } else {
         carrinho.push({ ...produto, img: capa, qtd: qtd });
     }
+    
     localStorage.setItem('lston_carrinho', JSON.stringify(carrinho));
     window.showToast("Adicionado ao carrinho!");
     atualizarCarrinhoUI();
@@ -226,7 +235,7 @@ window.alterarQtdCarrinho = (index, delta) => {
     atualizarCarrinhoUI();
 }
 
-// --- NOVO: CÁLCULO DE FRETE NO CARRINHO ---
+// --- CÁLCULO DE FRETE REAL (NOVA LÓGICA) ---
 window.calcularFreteCarrinho = async () => {
     const cepInput = document.getElementById('cart-cep-input');
     const resultDiv = document.getElementById('cart-frete-result');
@@ -238,19 +247,47 @@ window.calcularFreteCarrinho = async () => {
         return;
     }
 
-    resultDiv.innerText = "Calculando...";
+    resultDiv.innerText = "Consultando...";
     window.toggleLoading(true);
 
-    // Simulação de frete (R$ 15 a 40)
-    setTimeout(() => {
-        freteValor = Math.floor(Math.random() * (40 - 15 + 1) + 15);
-        resultDiv.innerHTML = `Frete: <strong>${window.fmtMoney(freteValor)}</strong> (5-7 dias)`;
-        resultDiv.style.color = "var(--green-color)";
-        localStorage.setItem('lston_cep', cepInput.value);
-        
-        atualizarCarrinhoUI(); // Atualiza total
+    try {
+        const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+        const data = await res.json();
+
+        if (data.erro) {
+            resultDiv.innerText = "CEP não encontrado.";
+            resultDiv.style.color = "red";
+        } else {
+            // Lógica Real baseada na Tabela
+            const uf = data.uf;
+            let regra = TABELA_FRETE[uf];
+            
+            // Verifica regiões agrupadas (SUL e NORDESTE)
+            if (!regra) {
+                if (['PR', 'SC', 'RS'].includes(uf)) regra = TABELA_FRETE['SUL'];
+                else if (['BA', 'PE', 'CE', 'MA', 'RN', 'PB', 'AL', 'SE', 'PI'].includes(uf)) regra = TABELA_FRETE['NORDESTE'];
+                else regra = TABELA_FRETE['PADRAO'];
+            }
+
+            // Cálculo: Base + (Adicional * (Quantidade - 1))
+            const qtdTotal = carrinho.reduce((acc, item) => acc + item.qtd, 0);
+            freteValor = regra.base + (regra.adicional * Math.max(0, qtdTotal - 1));
+
+            resultDiv.innerHTML = `Frete para <strong>${uf}</strong>: ${window.fmtMoney(freteValor)} <br><small>Prazo: ${regra.prazo}</small>`;
+            resultDiv.style.color = "var(--green-color)";
+            
+            localStorage.setItem('lston_cep', cepInput.value);
+            
+            // Atualiza o total com o novo valor de frete
+            atualizarCarrinhoUI();
+        }
+    } catch (e) {
+        console.error(e);
+        resultDiv.innerText = "Erro ao calcular.";
+        resultDiv.style.color = "red";
+    } finally {
         window.toggleLoading(false);
-    }, 1000);
+    }
 }
 
 function atualizarCarrinhoUI() {
@@ -268,6 +305,8 @@ function atualizarCarrinhoUI() {
     
     if(carrinho.length === 0) {
         lista.innerHTML = '<p style="text-align:center; padding:20px; color:#999;">Seu carrinho está vazio.</p>';
+        if(document.getElementById('cart-total')) document.getElementById('cart-total').innerHTML = "R$ 0,00";
+        return;
     }
 
     carrinho.forEach((item, index) => {
@@ -290,13 +329,13 @@ function atualizarCarrinhoUI() {
             </div>`;
     });
     
-    // Cálculo do total com desconto e frete
+    // Total Final: Subtotal - Desconto + Frete
     let total = subtotal - (subtotal * desconto);
     total += freteValor;
 
     let texto = "";
     if(freteValor > 0) {
-        texto = `Total: ${window.fmtMoney(total)} <small style="font-size:12px">(c/ frete)</small>`;
+        texto = `Total: ${window.fmtMoney(total)} <br><small style="font-size:11px; font-weight:normal;">(Inclui ${window.fmtMoney(freteValor)} de frete)</small>`;
     } else {
         texto = `Total: ${window.fmtMoney(total)}`;
     }
@@ -337,8 +376,20 @@ window.confirmarPedido = async () => {
     window.toggleLoading(true);
     try {
         let total = 0; carrinho.forEach(i => total += parseFloat(i.preco) * i.qtd);
-        total = total - (total * desconto) + freteValor; // Total com desconto e frete
-        await addDoc(collection(db, "pedidos"), { cliente: nome, endereco, itens: carrinho, total, data: new Date().toISOString(), status: "Recebido", userEmail: currentUserEmail });
+        // Aplica desconto e SOMA o frete ao total do pedido no banco de dados
+        total = (total - (total * desconto)) + freteValor; 
+        
+        await addDoc(collection(db, "pedidos"), { 
+            cliente: nome, 
+            endereco, 
+            itens: carrinho, 
+            total, 
+            frete: freteValor, // Salva o frete separadamente também para controle
+            data: new Date().toISOString(), 
+            status: "Recebido", 
+            userEmail: currentUserEmail 
+        });
+        
         for (const item of carrinho) {
             const ref = doc(db, "produtos", item.id);
             const nv = parseInt(item.estoque) - item.qtd; 
@@ -347,6 +398,7 @@ window.confirmarPedido = async () => {
         window.showToast("Sucesso!"); carrinho=[]; localStorage.setItem('lston_carrinho', '[]'); atualizarCarrinhoUI(); window.location.href="index.html";
     } catch(e){ window.showToast("Erro", "error"); } finally { window.toggleLoading(false); }
 }
+
 window.buscarCep = async () => {
     const cep = document.getElementById('check-cep').value.replace(/\D/g, '');
     if(cep.length !== 8) return;
