@@ -5,10 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Detalhes | L&stON</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    
     <link rel="stylesheet" href="css/global.css">
     <link rel="stylesheet" href="css/produto.css">
-    
     <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
     <script type="importmap"> { "imports": { "firebase/app": "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js", "firebase/auth": "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js", "firebase/firestore": "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js", "firebase/storage": "https://www.gstatic.com/firebasejs/10.13.0/firebase-storage.js" } } </script>
 </head>
@@ -21,6 +19,12 @@
         <div class="user-actions">
             <i class="fas fa-moon" id="theme-toggle" onclick="toggleTheme()" style="cursor:pointer;"></i>
             <a href="perfil.html" title="Minha Conta" id="user-display"><i class="far fa-user"></i> <span id="user-name" style="font-size:12px;">Login</span></a>
+            
+            <div style="position:relative;cursor:pointer;" onclick="toggleFavoritosModal()" title="Meus Favoritos">
+                <i class="far fa-heart"></i>
+                <span id="fav-count" style="position:absolute;top:-8px;right:-8px;background:var(--accent-color);color:white;border-radius:50%;padding:2px 5px;font-size:10px;display:none;">0</span>
+            </div>
+
             <div style="position:relative;cursor:pointer;" onclick="toggleCarrinho()"><i class="fas fa-shopping-cart"></i><span id="cart-count" style="position:absolute;top:-8px;right:-8px;background:red;color:white;border-radius:50%;padding:2px 5px;font-size:10px;">0</span></div>
         </div>
     </header>
@@ -43,8 +47,9 @@
                 </div>
                 <div id="reviews-list" style="margin-top:20px;"></div>
             </div>
+            
             <h2 style="margin-top: 50px; border-top: 1px solid var(--border-color); padding-top: 20px;">Relacionados:</h2>
-            <section class="products-section" id="related-container" style="justify-content: flex-start; margin-top: 20px;"></section>
+            <section class="products-section" id="related-container" style="justify-content: flex-start; margin-top: 20px; gap: 20px;"></section>
         </div>
     </main>
 
@@ -58,19 +63,18 @@
             </div>
             <div id="etapa-checkout" class="checkout-form" style="display: none; flex-direction: column; height: 100%;">
                 <div style="flex:1; overflow-y:auto;">
-                    <p>Entrega:</p>
-                    <div class="input-row">
-                        <input type="text" id="check-cep" placeholder="CEP" oninput="mascaraCep(this)" onblur="buscarCep()" maxlength="9">
-                        <button onclick="buscarCep()" class="btn-checkout-secondary" style="height:45px;">Busca</button>
                     </div>
-                    <input type="text" id="check-endereco" placeholder="Endereço">
-                    <input type="text" id="check-cidade" placeholder="Cidade">
-                    <input type="text" id="check-nome" placeholder="Seu Nome">
-                    <p>Pagamento:</p>
-                    <select id="check-pagamento"><option value="Pix">Pix</option><option value="Cartão">Cartão</option></select>
-                </div>
-                <div class="cart-footer"><button class="btn-checkout" onclick="confirmarPedido()">Finalizar Pedido</button><button class="btn-back-cart" onclick="voltarParaCarrinho()">Voltar</button></div>
             </div>
+        </div>
+    </div>
+
+    <div id="favoritos-modal" class="cart-modal-overlay">
+        <div class="cart-modal">
+            <div class="cart-header">
+                <h3>Meus Favoritos ❤️</h3>
+                <i class="fas fa-times close-cart-icon" onclick="toggleFavoritosModal()"></i>
+            </div>
+            <div id="itens-favoritos" class="cart-items"></div>
         </div>
     </div>
 

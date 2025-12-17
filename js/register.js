@@ -7,7 +7,7 @@ const notify = (msg, type) => {
     else alert(msg);
 };
 
-// Garante que a função esteja disponível globalmente para o botão HTML
+// Função global para o botão "Buscar" no HTML
 window.buscarCepReg = async () => {
     const cepInput = document.getElementById('reg-cep');
     if(!cepInput) return;
@@ -16,9 +16,8 @@ window.buscarCepReg = async () => {
     if(cep.length !== 8) return notify("CEP inválido! Digite 8 números.", "error");
     
     const btn = document.querySelector('.btn-cep');
-    const txtOriginal = btn.innerText;
-    btn.innerText = "...";
-    btn.disabled = true;
+    const txtOriginal = btn ? btn.innerText : 'Buscar';
+    if(btn) { btn.innerText = "..."; btn.disabled = true; }
 
     try {
         const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
@@ -28,7 +27,6 @@ window.buscarCepReg = async () => {
             document.getElementById('reg-endereco').value = data.logradouro;
             document.getElementById('reg-bairro').value = data.bairro;
             document.getElementById('reg-cidade').value = `${data.localidade}/${data.uf}`;
-            // Foca no número para facilitar
             document.getElementById('reg-num').focus();
             notify("Endereço encontrado!", "success");
         } else {
@@ -38,8 +36,7 @@ window.buscarCepReg = async () => {
         console.error(e);
         notify("Erro de conexão ao buscar CEP.", "error");
     } finally {
-        btn.innerText = txtOriginal;
-        btn.disabled = false;
+        if(btn) { btn.innerText = txtOriginal; btn.disabled = false; }
     }
 }
 
@@ -50,6 +47,7 @@ document.getElementById('registerForm').addEventListener('submit', async functio
     const pass = document.getElementById('reg-password').value;
     const confirm = document.getElementById('reg-confirm').value;
     
+    // Novos campos
     const telefone = document.getElementById('reg-tel').value;
     const cep = document.getElementById('reg-cep').value;
     const endereco = document.getElementById('reg-endereco').value;
@@ -66,12 +64,14 @@ document.getElementById('registerForm').addEventListener('submit', async functio
         btn.innerText = "Criando..."; 
         btn.disabled = true;
         
+        // 1. Cria usuário no Auth
         const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
         const user = userCredential.user;
 
+        // 2. Atualiza nome no Auth
         await updateProfile(user, { displayName: nome });
 
-        // Salva dados no Firestore
+        // 3. Salva dados completos no Firestore
         await setDoc(doc(db, "users", user.uid), {
             nome: nome,
             email: email,
