@@ -12,15 +12,13 @@
       {
         "imports": {
           "firebase/app": "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js",
-          "firebase/auth": "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js",
-          "firebase/firestore": "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js",
-          "firebase/storage": "https://www.gstatic.com/firebasejs/10.13.0/firebase-storage.js"
+          "firebase/auth": "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js"
         }
       }
     </script>
 </head>
 <body>
-    <i class="fas fa-adjust theme-toggle-login" onclick="toggleThemeLogin()" title="Alterar Tema"></i>
+    <i class="fas fa-moon theme-toggle-login" id="theme-icon" onclick="toggleThemeLogin()" title="Alterar Tema"></i>
 
     <div class="login-container">
         <div class="login-box">
@@ -34,12 +32,15 @@
                 </div>
                 <div class="input-group">
                     <label>Senha</label>
-                    <input type="password" id="password" placeholder="********" required>
+                    <div class="password-container">
+                        <input type="password" id="password" placeholder="********" required>
+                        <i class="fas fa-eye toggle-password" onclick="togglePassword('password', this)"></i>
+                    </div>
                 </div>
                 <button type="submit">Entrar</button>
             </form>
             
-            <p style="margin-top: 15px; font-size: 13px;">Esqueceu a senha? <a href="#" onclick="recuperarSenha()">Recuperar</a></p>
+            <p style="margin-top: 15px; font-size: 13px;">Esqueceu a senha? <a href="esqueceu-senha.html">Recuperar</a></p>
             
             <div style="margin-top: 25px; padding-top: 20px; border-top: 1px solid #eee;">
                 <p class="switch-page">Não tem uma conta? <a href="register.html">Cadastre-se</a></p>
@@ -50,6 +51,28 @@
     </div>
     
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+    <script>
+        function togglePassword(inputId, icon) {
+            const input = document.getElementById(inputId);
+            if (input.type === "password") { input.type = "text"; icon.classList.remove("fa-eye"); icon.classList.add("fa-eye-slash"); } 
+            else { input.type = "password"; icon.classList.remove("fa-eye-slash"); icon.classList.add("fa-eye"); }
+        }
+        const themeIcon = document.getElementById('theme-icon');
+        const savedTheme = localStorage.getItem('lston_theme') || 'light';
+        document.body.setAttribute('data-theme', savedTheme);
+        updateIcon(savedTheme);
+        function toggleThemeLogin() {
+            const currentTheme = document.body.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            document.body.setAttribute('data-theme', newTheme);
+            localStorage.setItem('lston_theme', newTheme);
+            updateIcon(newTheme);
+        }
+        function updateIcon(theme) {
+            if(theme === 'dark') { themeIcon.classList.remove('fa-moon'); themeIcon.classList.add('fa-sun'); } 
+            else { themeIcon.classList.remove('fa-sun'); themeIcon.classList.add('fa-moon'); }
+        }
+    </script>
     <script type="module" src="js/login.js"></script>
 </body>
 </html>

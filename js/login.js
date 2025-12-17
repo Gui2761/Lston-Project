@@ -1,14 +1,5 @@
 import { auth } from "./firebaseConfig.js";
-import { signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
-
-window.toggleThemeLogin = () => {
-    const body = document.body;
-    const newTheme = body.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-    body.setAttribute('data-theme', newTheme);
-    localStorage.setItem('lston_theme', newTheme);
-}
-const savedTheme = localStorage.getItem('lston_theme') || 'light';
-document.body.setAttribute('data-theme', savedTheme);
+import { signInWithEmailAndPassword } from "firebase/auth";
 
 const notify = (msg, type='success') => {
     if(typeof Toastify !== 'undefined') Toastify({ text: msg, duration: 3000, style: { background: type==='error'?"#e74c3c":"#2c3e50" } }).showToast(); 
@@ -38,38 +29,3 @@ document.getElementById('loginForm').addEventListener('submit', async function(e
         btn.innerText = "Entrar"; btn.disabled = false;
     }
 });
-
-// RECUPERAÇÃO DE SENHA MODERNA
-window.recuperarSenha = async () => {
-    if(typeof Swal === 'undefined') {
-        // Fallback se o SweetAlert não carregar
-        const email = prompt("Digite seu e-mail:");
-        if(email) enviarEmailRecuperacao(email);
-        return;
-    }
-
-    const { value: email } = await Swal.fire({
-        title: 'Recuperar Senha',
-        input: 'email',
-        inputLabel: 'Digite seu e-mail cadastrado',
-        inputPlaceholder: 'exemplo@email.com',
-        showCancelButton: true,
-        confirmButtonColor: '#2c3e50',
-        cancelButtonText: 'Cancelar',
-        confirmButtonText: 'Enviar Link'
-    });
-
-    if (email) {
-        enviarEmailRecuperacao(email);
-    }
-}
-
-async function enviarEmailRecuperacao(email) {
-    try {
-        await sendPasswordResetEmail(auth, email);
-        if(typeof Swal !== 'undefined') Swal.fire('Enviado!', 'Verifique sua caixa de entrada (e spam).', 'success');
-        else notify("Link enviado para o e-mail!", "success");
-    } catch(e) {
-        notify("Erro: Verifique o e-mail digitado.", "error");
-    }
-}

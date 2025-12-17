@@ -17,13 +17,13 @@
     --bg-card: #1e1e1e;
     --text-main: #e0e0e0;
     --text-muted: #aaaaaa;
-    --accent: #8bc34a; /* Verde no escuro */
+    --accent: #8bc34a;
     --accent-hover: #2ecc71;
     --border: #333333;
     --shadow: 0 10px 40px rgba(0,0,0,0.3);
 }
 
-/* --- ESTILOS --- */
+/* --- ESTILOS GERAIS --- */
 * { box-sizing: border-box; font-family: 'Poppins', sans-serif; }
 
 body {
@@ -36,16 +36,26 @@ body {
 .login-container { width: 100%; display: flex; justify-content: center; padding: 20px; }
 
 .login-box {
-    background: var(--bg-card); padding: 50px 40px; border-radius: 16px;
-    box-shadow: var(--shadow); text-align: center; width: 100%; max-width: 400px;
+    background: var(--bg-card); padding: 40px; border-radius: 16px;
+    box-shadow: var(--shadow); text-align: center; width: 100%; 
+    max-width: 500px; /* Aumentado para caber endereço */
+    max-height: 90vh; /* Limite de altura */
+    overflow-y: auto; /* Scroll se necessário */
     transition: background 0.3s;
+    margin: auto;
 }
+
+/* Scrollbar Bonita */
+.login-box::-webkit-scrollbar { width: 6px; }
+.login-box::-webkit-scrollbar-track { background: transparent; }
+.login-box::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
 
 .login-box h2 { margin-bottom: 5px; color: var(--text-main); font-weight: 700; font-size: 28px; }
 .login-box h2 span { color: var(--accent-hover); }
 .login-box p { color: var(--text-muted); font-size: 14px; margin-bottom: 30px; }
 
-.input-group { text-align: left; margin-bottom: 20px; }
+/* INPUTS */
+.input-group { text-align: left; margin-bottom: 15px; }
 .input-group label { display: block; margin-bottom: 8px; font-size: 13px; font-weight: 600; color: var(--text-main); }
 
 .input-group input {
@@ -55,22 +65,47 @@ body {
 }
 .input-group input:focus { border-color: var(--accent); }
 
-button {
+/* SENHA COM OLHO */
+.password-container { position: relative; width: 100%; }
+.toggle-password {
+    position: absolute; right: 15px; top: 50%; transform: translateY(-50%);
+    cursor: pointer; color: var(--text-muted); z-index: 10;
+}
+
+/* ENDEREÇO E CEP (LADO A LADO) */
+.address-row {
+    display: flex; gap: 10px; width: 100%; align-items: center;
+}
+.address-row input { flex: 1; min-width: 0; }
+.address-row .input-group { flex: 1; } /* Garante que divs internas cresçam */
+
+.btn-cep {
+    flex: 0 0 auto; width: auto; padding: 0 20px;
+    background: var(--accent); color: white; border: none; border-radius: 8px;
+    cursor: pointer; font-weight: 600; height: 45px; margin-top: 0;
+    font-size: 14px; display: flex; align-items: center; justify-content: center;
+    transition: 0.3s;
+}
+.btn-cep:hover { opacity: 0.9; }
+
+/* BOTÕES GERAIS */
+button[type="submit"] {
     width: 100%; padding: 15px; background: var(--accent);
     color: white; border: none; border-radius: 8px;
     cursor: pointer; font-size: 16px; font-weight: 600; transition: 0.3s;
-    margin-top: 10px;
+    margin-top: 10px; margin-bottom: 10px;
 }
 button:hover { background: var(--accent-hover); transform: translateY(-2px); }
 
-.switch-page { margin-top: 25px; font-size: 13px; color: var(--text-muted); }
+/* LINKS */
+.switch-page { margin-top: 20px; font-size: 13px; color: var(--text-muted); border-top: 1px solid var(--border); padding-top: 20px; }
 .switch-page a { color: var(--accent); font-weight: bold; text-decoration: none; margin-left: 5px; }
 .switch-page a:hover { text-decoration: underline; color: var(--accent-hover); }
 
-.back-link { margin-top: 20px; display: block; font-size: 12px; color: var(--text-muted); text-decoration: none; }
+.back-link { margin-top: 15px; display: block; font-size: 12px; color: var(--text-muted); text-decoration: none; }
 .back-link:hover { color: var(--text-main); }
 
-/* Toggle Theme no Login */
+/* TEMA TOGGLE */
 .theme-toggle-login {
     position: absolute; top: 20px; right: 20px; cursor: pointer;
     font-size: 24px; color: var(--text-main);

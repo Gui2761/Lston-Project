@@ -83,24 +83,24 @@ header { display: flex; justify-content: space-between; align-items: center; pad
 .coupon-area button { padding: 10px 20px; background: var(--accent-color); color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
 .coupon-area button:hover { background: var(--green-color); }
 
+/* FRETE CALCULATOR (NOVO) */
+.cart-shipping-calc {
+    background: var(--bg-secondary); padding: 12px; 
+    border-radius: 6px; margin-bottom: 15px; 
+    border: 1px solid var(--border-color);
+}
+.cart-shipping-row { display: flex; gap: 8px; margin-top: 8px; }
+.cart-shipping-row input { flex: 1; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-color); color: var(--text-color); }
+.cart-shipping-row button { padding: 8px 12px; background: var(--text-color); color: var(--bg-color); border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+
 /* Checkout Styles */
 .checkout-form p { font-weight: bold; margin: 15px 0 10px; color: var(--accent-color); border-bottom: 1px solid var(--border-color); padding-bottom: 5px; }
 .checkout-form input, .checkout-form select { width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); color: var(--text-color); margin-bottom: 10px; font-size: 14px; }
 .input-row { display: flex; gap: 10px; }
 
-/* BOTÃO DE BUSCA NO CHECKOUT (CORRIGIDO PARA VERDE) */
-.btn-checkout-secondary { 
-    padding: 10px 20px; 
-    background: var(--green-color); 
-    color: white; 
-    border: none; 
-    border-radius: 8px; 
-    font-weight: 600;
-    transition: 0.3s;
-    flex-shrink: 0; 
-}
+/* BOTÕES CHECKOUT */
+.btn-checkout-secondary { padding: 10px 20px; background: var(--green-color); color: white; border: none; border-radius: 8px; font-weight: 600; transition: 0.3s; flex-shrink: 0; }
 .btn-checkout-secondary:hover { background: #7cb342; }
-
 .btn-checkout { width: 100%; padding: 15px; background-color: var(--green-color); color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.3s; font-size: 16px; margin-top: 10px; }
 .btn-checkout:hover { background-color: #7cb342; }
 .btn-back-cart { width: 100%; padding: 12px; background: transparent; border: 1px solid var(--text-muted); color: var(--text-muted); border-radius: 8px; font-weight: 600; cursor: pointer; margin-top: 10px; }

@@ -1,52 +1,100 @@
-import { auth, db } from "./firebaseConfig.js"; // Importa DB também
-import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
-import { doc, setDoc } from "firebase/firestore"; // Importa Firestore
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Criar Conta | L&stON</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="css/login.css">
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+    
+    <script type="importmap">
+      {
+        "imports": {
+          "firebase/app": "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js",
+          "firebase/auth": "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js",
+          "firebase/firestore": "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js",
+          "firebase/storage": "https://www.gstatic.com/firebasejs/10.13.0/firebase-storage.js"
+        }
+      }
+    </script>
+</head>
+<body>
+    <i class="fas fa-moon theme-toggle-login" id="theme-icon" onclick="toggleThemeLogin()" title="Alterar Tema"></i>
 
-const notify = (msg, type) => {
-    if(typeof Toastify !== 'undefined') {
-        Toastify({ text: msg, style: { background: type==='error'?"#e74c3c":"#2c3e50" } }).showToast();
-    } else { alert(msg); }
-};
+    <div class="login-container">
+        <div class="login-box">
+            <h2>Crie sua conta</h2>
+            <p>Junte-se à L&st<span>ON</span></p>
+            
+            <form id="registerForm">
+                <div class="input-group"><label>Nome Completo</label><input type="text" id="reg-nome" required></div>
+                <div class="input-group"><label>E-mail</label><input type="email" id="reg-email" required></div>
+                <div class="input-group"><label>Telefone</label><input type="text" id="reg-tel" placeholder="(XX) XXXXX-XXXX"></div>
 
-document.getElementById('registerForm').addEventListener('submit', async function(e) {
-    e.preventDefault();
-    const nome = document.getElementById('reg-nome').value;
-    const email = document.getElementById('reg-email').value;
-    const pass = document.getElementById('reg-password').value;
-    const confirm = document.getElementById('reg-confirm').value;
-    const btn = this.querySelector('button');
+                <div class="input-group">
+                    <label>CEP</label>
+                    <div class="address-row">
+                        <input type="text" id="reg-cep" placeholder="00000-000" maxlength="9" oninput="mascaraCep(this)">
+                        <button type="button" class="btn-cep" onclick="buscarCepReg()">Buscar</button>
+                    </div>
+                </div>
 
-    if(pass !== confirm) return notify("As senhas não coincidem!", "error");
-    if(pass.length < 6) return notify("A senha deve ter pelo menos 6 caracteres.", "error");
+                <div class="address-row">
+                    <div class="input-group" style="flex:2"><label>Endereço</label><input type="text" id="reg-endereco"></div>
+                    <div class="input-group" style="flex:1"><label>Número</label><input type="text" id="reg-num"></div>
+                </div>
+                <div class="address-row">
+                    <div class="input-group" style="flex:1"><label>Bairro</label><input type="text" id="reg-bairro"></div>
+                    <div class="input-group" style="flex:1"><label>Cidade/UF</label><input type="text" id="reg-cidade"></div>
+                </div>
 
-    try {
-        btn.innerText = "Criando..."; 
-        btn.disabled = true;
-        
-        // 1. Cria usuário no Auth
-        const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
-        const user = userCredential.user;
-
-        // 2. Atualiza nome no Auth
-        await updateProfile(user, { displayName: nome });
-
-        // 3. CRIA DOCUMENTO NO FIRESTORE (Para salvar endereço depois)
-        await setDoc(doc(db, "users", user.uid), {
-            nome: nome,
-            email: email,
-            dataCadastro: new Date().toISOString()
-        });
-
-        notify("Conta criada com sucesso!", "success");
-        setTimeout(() => window.location.href = 'index.html', 1500);
-
-    } catch (error) {
-        console.error("Erro no registro:", error); 
-        let msg = "Erro ao criar conta.";
-        if(error.code === 'auth/email-already-in-use') msg = "Este e-mail já está sendo usado.";
-        if(error.code === 'auth/weak-password') msg = "Senha muito fraca.";
-        notify(msg, "error");
-        btn.innerText = "Cadastrar"; 
-        btn.disabled = false;
-    }
-});
+                <div class="input-group">
+                    <label>Senha</label>
+                    <div class="password-container">
+                        <input type="password" id="reg-password" placeholder="Min 6 caracteres" required>
+                        <i class="fas fa-eye toggle-password" onclick="togglePassword('reg-password', this)"></i>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label>Confirmar Senha</label>
+                    <div class="password-container">
+                        <input type="password" id="reg-confirm" required>
+                        <i class="fas fa-eye toggle-password" onclick="togglePassword('reg-confirm', this)"></i>
+                    </div>
+                </div>
+                <button type="submit">Cadastrar</button>
+            </form>
+            
+            <p class="switch-page">Já tem conta? <a href="login.html">Faça Login</a></p>
+        </div>
+    </div>
+    
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+    <script>
+        function togglePassword(inputId, icon) {
+            const input = document.getElementById(inputId);
+            if (input.type === "password") { input.type = "text"; icon.classList.remove("fa-eye"); icon.classList.add("fa-eye-slash"); } 
+            else { input.type = "password"; icon.classList.remove("fa-eye-slash"); icon.classList.add("fa-eye"); }
+        }
+        function mascaraCep(el) { el.value = el.value.replace(/\D/g, "").replace(/^(\d{5})(\d)/, "$1-$2"); }
+        const themeIcon = document.getElementById('theme-icon');
+        const savedTheme = localStorage.getItem('lston_theme') || 'light';
+        document.body.setAttribute('data-theme', savedTheme);
+        updateIcon(savedTheme);
+        function toggleThemeLogin() {
+            const currentTheme = document.body.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            document.body.setAttribute('data-theme', newTheme);
+            localStorage.setItem('lston_theme', newTheme);
+            updateIcon(newTheme);
+        }
+        function updateIcon(theme) {
+            if(theme === 'dark') { themeIcon.classList.remove('fa-moon'); themeIcon.classList.add('fa-sun'); } 
+            else { themeIcon.classList.remove('fa-sun'); themeIcon.classList.add('fa-moon'); }
+        }
+    </script>
+    <script type="module" src="js/register.js"></script>
+</body>
+</html>

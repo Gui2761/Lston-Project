@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recuperar Senha | L&stON</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="css/login.css">
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+    
+    <script type="importmap">
+      {
+        "imports": {
+          "firebase/app": "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js",
+          "firebase/auth": "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js"
+        }
+      }
+    </script>
+</head>
+<body>
+    <i class="fas fa-adjust theme-toggle-login" onclick="toggleThemeLogin()" title="Alterar Tema"></i>
+
+    <div class="login-container">
+        <div class="login-box">
+            <h2>Recuperar Senha</h2>
+            <p>Digite seu e-mail para receber o link</p>
+            
+            <form id="forgotForm">
+                <div class="input-group">
+                    <label>E-mail Cadastrado</label>
+                    <input type="email" id="rec-email" placeholder="seu@email.com" required>
+                </div>
+                <button type="submit">Enviar Link</button>
+            </form>
+            
+            <div style="margin-top: 25px; padding-top: 20px; border-top: 1px solid #eee;">
+                <a href="login.html" class="back-link">Voltar para Login</a>
+            </div>
+        </div>
+    </div>
+    
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+    <script>
+        // Tema script simples
+        window.toggleThemeLogin = () => {
+            const b=document.body; const n=b.getAttribute('data-theme')==='dark'?'light':'dark'; 
+            b.setAttribute('data-theme', n); localStorage.setItem('lston_theme', n);
+        }
+        document.body.setAttribute('data-theme', localStorage.getItem('lston_theme')||'light');
+    </script>
+    
+    <script type="module">
+        import { initializeApp } from "firebase/app";
+        import { getAuth, sendPasswordResetEmail } from "firebase/auth";
+        import { app } from "./js/firebaseConfig.js"; // Importa do seu config existente
+
+        const auth = getAuth(app);
+        const notify = (msg, type) => Toastify({ text: msg, style: { background: type==='error'?"#e74c3c":"#2c3e50" } }).showToast();
+
+        document.getElementById('forgotForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('rec-email').value;
+            const btn = e.target.querySelector('button');
+
+            try {
+                btn.innerText = "Enviando..."; btn.disabled = true;
+                await sendPasswordResetEmail(auth, email);
+                notify("Link enviado! Verifique seu e-mail.", "success");
+                setTimeout(() => window.location.href = "login.html", 3000);
+            } catch(err) {
+                console.error(err);
+                notify("Erro: Verifique o e-mail digitado.", "error");
+                btn.innerText = "Enviar Link"; btn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
