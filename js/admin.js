@@ -47,10 +47,10 @@ onAuthStateChanged(auth, (user) => {
 
 // --- HELPERS ---
 function showToast(msg, type='success') { if(typeof Toastify !== 'undefined') Toastify({ text: msg, duration: 3000, style: { background: type==='error'?"#c62828":"#2c3e50" } }).showToast(); }
-function toggleLoading(show) { document.getElementById('loading-overlay').style.display = show ? 'flex' : 'none'; }
+function toggleLoading(show) { const el = document.getElementById('loading-overlay'); if(el) el.style.display = show ? 'flex' : 'none'; }
 function fmtMoney(val) { return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val); }
 
-// --- DRAG & DROP LOGIC (NOVA) ---
+// --- DRAG & DROP LOGIC ---
 function initDragAndDrop() {
     const dropZone = document.getElementById('drop-zone');
     const input = document.getElementById('prod-imgs-hidden');
@@ -128,7 +128,7 @@ sections.forEach(s => {
     }
 });
 
-// --- DASHBOARD (COM FILTRO E ALERTAS) ---
+// --- DASHBOARD ---
 async function renderizarDashboard() {
     const filtroData = document.getElementById('filtro-data-dashboard')?.value || 'total';
     const q = await getDocs(pedidosCollection);
@@ -152,7 +152,6 @@ async function renderizarDashboard() {
         dias[dStr] = (dias[dStr]||0)+p.total;
     });
     
-    // Atualiza KPIs
     document.getElementById('kpi-faturamento').innerText = fmtMoney(totalFat);
     document.getElementById('kpi-vendas').innerText = totalVendas;
     
@@ -187,13 +186,17 @@ async function verificarEstoqueCritico() {
 }
 
 function desenharGraficos(cats, dias) {
+    const ctxCat = document.getElementById('graficoCategorias');
+    const ctxFat = document.getElementById('graficoFaturamento');
+    if(!ctxCat || !ctxFat) return;
+
     if(chartCat) chartCat.destroy(); if(chartFat) chartFat.destroy();
-    chartCat = new Chart(document.getElementById('graficoCategorias'), { type:'doughnut', data:{ labels:Object.keys(cats), datasets:[{data:Object.values(cats), backgroundColor:['#e74c3c','#3498db','#f1c40f','#2ecc71']}] } });
+    chartCat = new Chart(ctxCat, { type:'doughnut', data:{ labels:Object.keys(cats), datasets:[{data:Object.values(cats), backgroundColor:['#e74c3c','#3498db','#f1c40f','#2ecc71']}] } });
     const sorted = Object.keys(dias).sort();
-    chartFat = new Chart(document.getElementById('graficoFaturamento'), { type:'line', data:{ labels:sorted, datasets:[{label:'Faturamento', data:sorted.map(d=>dias[d]), borderColor:'#8bc34a', fill:true}] } });
+    chartFat = new Chart(ctxFat, { type:'line', data:{ labels:sorted, datasets:[{label:'Faturamento', data:sorted.map(d=>dias[d]), borderColor:'#8bc34a', fill:true}] } });
 }
 
-// --- PEDIDOS (MANTIDO) ---
+// --- PEDIDOS ---
 const filtroStatusEl = document.getElementById('filtro-status');
 if(filtroStatusEl) filtroStatusEl.addEventListener('change', filtrarPedidos);
 
@@ -216,9 +219,34 @@ function filtrarPedidos() {
     });
 }
 async function updateStatus(id, st) { try { await updateDoc(doc(db,"pedidos",id), {status:st}); showToast("Atualizado!"); } catch(e) { showToast("Erro", "error"); } }
+
+window.verDetalhes = (id) => { 
+    const p = todosPedidosCache.find(x => x.id === id); 
+    if(p) { 
+        document.getElementById('conteudo-detalhes').innerHTML=`
+            <div style="font-size:14px; line-height:1.6;">
+                <p><strong>Cliente:</strong> ${p.cliente} <span style="font-size:12px; color:#666;">(${p.userEmail})</span></p>
+                <p><strong>Telefone:</strong> ${p.telefone || 'Não informado'}</p>
+                <hr style="margin:10px 0; border-top:1px solid #eee;">
+                <p><strong>Endereço:</strong> ${p.endereco}</p>
+                <p><strong>Cidade/CEP:</strong> ${p.cidade || '-'} / ${p.cep || '-'}</p>
+                <hr style="margin:10px 0; border-top:1px solid #eee;">
+                <p><strong>Pagamento:</strong> ${p.pagamento || 'Não informado'}</p>
+                <p><strong>Status:</strong> <span style="background:${p.status==='Entregue'?'#2ecc71':'#f39c12'}; color:white; padding:2px 6px; border-radius:4px; font-size:12px;">${p.status}</span></p>
+                <hr style="margin:10px 0; border-top:1px solid #eee;">
+                <p style="font-weight:bold;">Itens:</p>
+                <ul>${p.itens.map(i=>`<li>${i.nome} - (${i.qtd}x) - ${fmtMoney(i.preco)}</li>`).join('')}</ul>
+                <hr style="margin:10px 0; border-top:1px solid #eee;">
+                <p>Subtotal + Frete: <span style="float:right;">${fmtMoney(p.total - (p.frete||0))} + ${fmtMoney(p.frete||0)}</span></p>
+                <p style="font-size:18px; font-weight:bold; color:#2c3e50; margin-top:5px;">Total: <span style="float:right;">${fmtMoney(p.total)}</span></p>
+            </div>`; 
+        document.getElementById('modalDetalhes').style.display='flex'; 
+    } 
+}
+
 window.exportarPedidos = () => {
-    let csv = "Data,Cliente,Total,Status\n";
-    todosPedidosCache.forEach(p => { csv += `${new Date(p.data).toLocaleDateString()},${p.cliente},${p.total},${p.status}\n`; });
+    let csv = "Data,Cliente,Email,Telefone,Total,Status\n";
+    todosPedidosCache.forEach(p => { csv += `${new Date(p.data).toLocaleDateString()},${p.cliente},${p.userEmail},${p.telefone||''},${p.total},${p.status}\n`; });
     const a = document.createElement('a'); a.href = window.URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = 'pedidos.csv'; a.click();
 };
 
@@ -298,7 +326,7 @@ document.getElementById('btn-save-prod').addEventListener('click', async functio
     } catch(e){ console.error(e); showToast("Erro ao salvar.", "error"); } finally { toggleLoading(false); }
 });
 
-// --- BANNERS & CUPONS (MANTIDO) ---
+// --- BANNERS & CUPONS ---
 async function renderizarBanners() {
     const tbody = document.getElementById('tabela-banners');
     const q = await getDocs(bannersCollection);
@@ -341,11 +369,9 @@ document.getElementById('btn-save-cupom').addEventListener('click', async () => 
 });
 window.delCupom = async (id) => { if(confirm("Excluir?")) await deleteDoc(doc(db,"cupons",id)); renderizarCupons(); };
 
-window.verDetalhes = (id) => { const p = todosPedidosCache.find(x => x.id === id); if(p) { document.getElementById('conteudo-detalhes').innerHTML=`<p><strong>Cliente:</strong> ${p.cliente}</p><p>End: ${p.endereco}</p><hr><ul>${p.itens.map(i=>`<li>${i.nome} (${i.qtd}x)</li>`).join('')}</ul><p>Total: ${fmtMoney(p.total)}</p>`; document.getElementById('modalDetalhes').style.display='flex'; } }
 window.abrirModalProduto = () => { 
     document.getElementById('prod-id').value=""; document.getElementById('modal-titulo').innerText="Novo Produto";
-    filesToUpload = []; // RESET DRAG DROP
-    document.getElementById('preview-container').innerHTML = "";
+    filesToUpload = []; document.getElementById('preview-container').innerHTML = "";
     ['prod-nome','prod-preco','prod-preco-antigo','prod-estoque','prod-desc'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ""; });
     document.getElementById('modalProduto').style.display='flex'; 
 }

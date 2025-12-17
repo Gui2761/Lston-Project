@@ -19,12 +19,25 @@
         }
       }
     </script>
+    <style>
+        .password-container { position: relative; }
+        .toggle-password { position: absolute; right: 15px; top: 50%; transform: translateY(-50%); cursor: pointer; color: var(--text-muted); }
+        .address-row { display: flex; gap: 10px; }
+        .address-row input { flex: 1; }
+        .btn-cep { 
+            padding: 0 12px; background: var(--accent); color: white; 
+            border: none; border-radius: 8px; cursor: pointer; font-weight: 600; 
+            height: 42px; font-size: 13px; margin-top: 0; transition: background 0.3s;
+        }
+        .btn-cep:hover { opacity: 0.9; }
+        .btn-cep:disabled { background: #ccc; cursor: not-allowed; }
+    </style>
 </head>
 <body>
     <i class="fas fa-moon theme-toggle-login" id="theme-icon" onclick="toggleThemeLogin()" title="Alterar Tema"></i>
 
     <div class="login-container">
-        <div class="login-box">
+        <div class="login-box" style="max-width: 500px;">
             <h2>Crie sua conta</h2>
             <p>Junte-se à L&st<span>ON</span></p>
             
@@ -40,7 +53,6 @@
                         <button type="button" class="btn-cep" onclick="buscarCepReg()">Buscar</button>
                     </div>
                 </div>
-
                 <div class="address-row">
                     <div class="input-group" style="flex:2"><label>Endereço</label><input type="text" id="reg-endereco"></div>
                     <div class="input-group" style="flex:1"><label>Número</label><input type="text" id="reg-num"></div>
@@ -64,10 +76,12 @@
                         <i class="fas fa-eye toggle-password" onclick="togglePassword('reg-confirm', this)"></i>
                     </div>
                 </div>
-                <button type="submit">Cadastrar</button>
+                <button type="submit" style="margin-bottom: 20px;">Cadastrar</button>
             </form>
             
-            <p class="switch-page">Já tem conta? <a href="login.html">Faça Login</a></p>
+            <div style="margin-top: 10px; padding-top: 20px; border-top: 1px solid #eee;">
+                <p class="switch-page">Já tem conta? <a href="login.html">Faça Login</a></p>
+            </div>
         </div>
     </div>
     
@@ -79,10 +93,12 @@
             else { input.type = "password"; icon.classList.remove("fa-eye-slash"); icon.classList.add("fa-eye"); }
         }
         function mascaraCep(el) { el.value = el.value.replace(/\D/g, "").replace(/^(\d{5})(\d)/, "$1-$2"); }
+
         const themeIcon = document.getElementById('theme-icon');
         const savedTheme = localStorage.getItem('lston_theme') || 'light';
         document.body.setAttribute('data-theme', savedTheme);
         updateIcon(savedTheme);
+
         function toggleThemeLogin() {
             const currentTheme = document.body.getAttribute('data-theme');
             const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
@@ -90,6 +106,7 @@
             localStorage.setItem('lston_theme', newTheme);
             updateIcon(newTheme);
         }
+
         function updateIcon(theme) {
             if(theme === 'dark') { themeIcon.classList.remove('fa-moon'); themeIcon.classList.add('fa-sun'); } 
             else { themeIcon.classList.remove('fa-sun'); themeIcon.classList.add('fa-moon'); }

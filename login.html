@@ -12,10 +12,16 @@
       {
         "imports": {
           "firebase/app": "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js",
-          "firebase/auth": "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js"
+          "firebase/auth": "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js",
+          "firebase/firestore": "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js",
+          "firebase/storage": "https://www.gstatic.com/firebasejs/10.13.0/firebase-storage.js"
         }
       }
     </script>
+    <style>
+        .password-container { position: relative; }
+        .toggle-password { position: absolute; right: 15px; top: 50%; transform: translateY(-50%); cursor: pointer; color: var(--text-muted); }
+    </style>
 </head>
 <body>
     <i class="fas fa-moon theme-toggle-login" id="theme-icon" onclick="toggleThemeLogin()" title="Alterar Tema"></i>
@@ -51,16 +57,19 @@
     </div>
     
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+    
     <script>
         function togglePassword(inputId, icon) {
             const input = document.getElementById(inputId);
             if (input.type === "password") { input.type = "text"; icon.classList.remove("fa-eye"); icon.classList.add("fa-eye-slash"); } 
             else { input.type = "password"; icon.classList.remove("fa-eye-slash"); icon.classList.add("fa-eye"); }
         }
+
         const themeIcon = document.getElementById('theme-icon');
         const savedTheme = localStorage.getItem('lston_theme') || 'light';
         document.body.setAttribute('data-theme', savedTheme);
         updateIcon(savedTheme);
+
         function toggleThemeLogin() {
             const currentTheme = document.body.getAttribute('data-theme');
             const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
@@ -68,6 +77,7 @@
             localStorage.setItem('lston_theme', newTheme);
             updateIcon(newTheme);
         }
+
         function updateIcon(theme) {
             if(theme === 'dark') { themeIcon.classList.remove('fa-moon'); themeIcon.classList.add('fa-sun'); } 
             else { themeIcon.classList.remove('fa-sun'); themeIcon.classList.add('fa-moon'); }
