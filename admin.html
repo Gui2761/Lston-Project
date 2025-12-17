@@ -9,6 +9,14 @@
     <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script type="importmap"> { "imports": { "firebase/app": "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js", "firebase/auth": "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js", "firebase/firestore": "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js", "firebase/storage": "https://www.gstatic.com/firebasejs/10.13.0/firebase-storage.js" } } </script>
+    <style>
+        .drop-zone { border: 2px dashed var(--accent); border-radius: 8px; padding: 20px; text-align: center; cursor: pointer; background: var(--bg-body); transition: 0.3s; color: var(--text-light); }
+        .drop-zone:hover, .drop-zone.drag-over { background: rgba(139, 195, 74, 0.1); border-color: var(--accent); }
+        .preview-container { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 15px; }
+        .preview-card { width: 70px; height: 70px; position: relative; border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+        .preview-card img { width: 100%; height: 100%; object-fit: cover; }
+        .preview-card .remove-btn { position: absolute; top: 2px; right: 2px; background: rgba(0,0,0,0.6); color: white; border-radius: 50%; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; font-size: 10px; cursor: pointer; }
+    </style>
 </head>
 <body>
     <div id="loading-overlay" class="loading-overlay"><div class="spinner"></div><p>Processando...</p></div>
@@ -25,14 +33,14 @@
 
     <main class="main-content">
         <div class="header-admin">
-            <h1>Painel Administrativo</h1>
+            <h1>Painel de Controle</h1>
             <div class="header-actions">
                 <select id="filtro-data-dashboard" onchange="renderizarDashboard()" class="filter-select" style="padding: 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-main);">
-                    <option value="total">Faturação Total</option>
+                    <option value="total">Todo o Período</option>
                     <option value="hoje">Vendas de Hoje</option>
                 </select>
                 <i class="fas fa-moon theme-toggle-admin" id="theme-toggle-admin" onclick="toggleThemeAdmin()" title="Alternar Tema"></i>
-                <div>Bem-vindo, <strong>Admin</strong></div>
+                <div>Olá, <strong>Administrador</strong></div>
             </div>
         </div>
 
@@ -40,9 +48,9 @@
 
         <div id="section-dashboard">
             <div class="kpi-container">
-                <div class="kpi-card"><h3>FATURAÇÃO</h3><div class="value" id="kpi-faturamento">R$ 0,00</div></div>
+                <div class="kpi-card"><h3>FATURAMENTO</h3><div class="value" id="kpi-faturamento">R$ 0,00</div></div>
                 <div class="kpi-card blue-border"><h3>VENDAS</h3><div class="value" id="kpi-vendas">0</div></div>
-                <div class="kpi-card red-border"><h3>STOCK TOTAL</h3><div class="value" id="total-estoque-count">0</div></div>
+                <div class="kpi-card red-border"><h3>ESTOQUE</h3><div class="value" id="total-estoque-count">0</div></div>
             </div>
             <div style="display: flex; gap: 20px; flex-wrap: wrap;">
                 <div class="product-section" style="flex: 1; min-width: 300px;"><h3>Categorias</h3><canvas id="graficoCategorias"></canvas></div>
@@ -51,7 +59,10 @@
         </div>
 
         <div id="section-produtos" class="product-section" style="display: none;">
-            <div class="section-header"><h2>Gerenciar Produtos</h2><button class="btn-add" onclick="window.abrirModalProduto()">+ Novo Produto</button></div>
+            <div class="section-header">
+                <h2>Gerenciar Produtos</h2>
+                <button class="btn-add" onclick="abrirModalProduto()">+ Novo Produto</button>
+            </div>
             <table><thead><tr><th>Img</th><th>Nome</th><th>Estoque</th><th>Preço</th><th>Ações</th></tr></thead><tbody id="tabela-produtos"></tbody></table>
         </div>
 
@@ -80,25 +91,33 @@
     <div id="modalProduto" class="modal-overlay" style="display: none;">
         <div class="modal-content" style="max-height:90vh;overflow-y:auto;">
             <h3 id="modal-titulo">Novo Produto</h3>
-            <input type="hidden" id="prod-id"><label>Nome:</label><input type="text" id="prod-nome">
+            <input type="hidden" id="prod-id">
+            <label>Nome:</label><input type="text" id="prod-nome">
             <div class="price-qty-row">
                 <div style="flex:1"><label>Preço Atual:</label><input type="number" id="prod-preco"></div>
                 <div style="flex:1"><label>Preço Original:</label><input type="number" id="prod-preco-antigo" placeholder="De"></div>
             </div>
-            <div class="input-group full-width-input"><label style="color:var(--accent); font-weight:bold;">Qtd (Estoque):</label><input type="number" id="prod-estoque" style="border: 2px solid var(--accent);"></div>
+            <div class="input-group full-width-input">
+                <label style="color:var(--accent); font-weight:bold;">Qtd (Estoque):</label>
+                <input type="number" id="prod-estoque" style="border: 2px solid var(--accent);">
+            </div>
             <label>Categoria:</label><select id="prod-cat" style="width:100%; padding:8px; margin:5px 0;"><option value="Geral">Selecionar...</option><option value="Roupas">Roupas</option><option value="Calçados">Calçados</option><option value="Tecnologia">Tecnologia</option><option value="Esportes">Esportes</option></select>
             <label>Descrição:</label><textarea id="prod-desc" rows="3" style="min-height: 100px;"></textarea>
+            
             <div style="background:var(--bg-body); padding:15px; border-radius:8px;">
-                <p style="font-weight: bold; font-size: 13px; margin-bottom:10px;">Galeria (Fotos):</p>
-                <div class="file-group"><input type="file" id="img-1" accept="image/*"><img id="preview-1" class="preview-img"></div>
-                <div class="file-group"><input type="file" id="img-2" accept="image/*"><img id="preview-2" class="preview-img"></div>
-                <div class="file-group"><input type="file" id="img-3" accept="image/*"><img id="preview-3" class="preview-img"></div>
-                <div class="file-group"><input type="file" id="img-4" accept="image/*"><img id="preview-4" class="preview-img"></div>
+                <p style="font-weight: bold; font-size: 13px; margin-bottom:10px;">Galeria (Arraste fotos):</p>
+                <div id="drop-zone" class="drop-zone">
+                    <i class="fas fa-cloud-upload-alt"></i>
+                    <p>Arraste fotos ou clique</p>
+                    <input type="file" id="prod-imgs-hidden" multiple accept="image/*" style="display:none;">
+                </div>
+                <div id="preview-container" class="preview-container"></div>
             </div>
-            <div class="modal-buttons"><button id="btn-save-prod" class="btn-save">Salvar</button><button onclick="window.fecharModal()" class="btn-cancel">Cancelar</button></div>
+            
+            <div class="modal-buttons"><button id="btn-save-prod" class="btn-save">Salvar</button><button onclick="fecharModal()" class="btn-cancel">Cancelar</button></div>
         </div>
     </div>
-    
+
     <div id="modalBanner" class="modal-overlay" style="display: none;"><div class="modal-content"><h3>Banner</h3><label>Título:</label><input type="text" id="banner-titulo"><label>Subtítulo:</label><input type="text" id="banner-sub"><label>Imagem:</label><input type="file" id="banner-img"><div class="modal-buttons"><button id="btn-save-banner" class="btn-save">Salvar</button><button onclick="document.getElementById('modalBanner').style.display='none'" class="btn-cancel">Cancelar</button></div></div></div>
     <div id="modalCupom" class="modal-overlay" style="display: none;"><div class="modal-content"><h3>Cupom</h3><label>Código:</label><input type="text" id="cupom-code"><label>Desc (%):</label><input type="number" id="cupom-val"><label>Validade:</label><input type="date" id="cupom-validade"><div class="modal-buttons"><button id="btn-save-cupom" class="btn-save">Salvar</button><button onclick="document.getElementById('modalCupom').style.display='none'" class="btn-cancel">Cancelar</button></div></div></div>
     <div id="modalDetalhes" class="modal-overlay" style="display: none;"><div class="modal-content" style="width: 500px;"><h3>Detalhes</h3><div id="conteudo-detalhes"></div><button onclick="document.getElementById('modalDetalhes').style.display='none'" class="btn-cancel" style="margin-top:20px;">Fechar</button></div></div>

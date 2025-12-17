@@ -6,6 +6,7 @@ let carrinho = JSON.parse(localStorage.getItem('lston_carrinho')) || [];
 let favoritos = JSON.parse(localStorage.getItem('lston_favoritos')) || [];
 let todosProdutos = []; 
 let desconto = 0;
+let freteValor = 0; // NOVA VARIAVEL PARA FRETE
 let currentUserEmail = null;
 const container = document.getElementById('products-container');
 
@@ -15,57 +16,6 @@ window.fmtMoney = (val) => { return new Intl.NumberFormat('pt-BR', { style: 'cur
 window.toggleLoading = (show) => { const el = document.getElementById('loading-overlay'); if(el) el.style.display = show ? 'flex' : 'none'; }
 window.mascaraCep = (el) => { el.value = el.value.replace(/\D/g, "").replace(/^(\d{5})(\d)/, "$1-$2"); };
 window.toggleMenu = () => { document.getElementById('nav-menu').classList.toggle('active'); }
-
-// --- LÓGICA DE BUSCA APROXIMADA (FUZZY SEARCH) ---
-function calcularSimilaridade(s1, s2) {
-    let longer = s1.length < s2.length ? s2 : s1;
-    let shorter = s1.length < s2.length ? s1 : s2;
-    if (longer.length === 0) return 1.0;
-    return (longer.length - editDistance(longer, shorter)) / parseFloat(longer.length);
-}
-
-function editDistance(s1, s2) {
-    s1 = s1.toLowerCase(); s2 = s2.toLowerCase();
-    let costs = [];
-    for (let i = 0; i <= s1.length; i++) {
-        let lastValue = i;
-        for (let j = 0; j <= s2.length; j++) {
-            if (i == 0) costs[j] = j;
-            else if (j > 0) {
-                let newValue = costs[j - 1];
-                if (s1.charAt(i - 1) != s2.charAt(j - 1))
-                    newValue = Math.min(Math.min(newValue, lastValue), costs[j]) + 1;
-                costs[j - 1] = lastValue;
-                lastValue = newValue;
-            }
-        }
-        if (i > 0) costs[s2.length] = lastValue;
-    }
-    return costs[s2.length];
-}
-
-const campoBusca = document.getElementById('campo-busca');
-if (campoBusca) {
-    campoBusca.addEventListener('input', (e) => {
-        const termo = e.target.value.toLowerCase();
-        if (termo.length < 2) { 
-            exibirProdutos(todosProdutos); 
-            if(document.getElementById('titulo-secao')) document.getElementById('titulo-secao').innerText = "Destaques";
-            return; 
-        }
-        const filtrados = todosProdutos.filter(p => {
-            const nome = p.nome.toLowerCase();
-            const cat = (p.categoria || "").toLowerCase();
-            if (nome.includes(termo) || cat.includes(termo)) return true;
-            if (termo.length > 3) {
-                return nome.split(" ").some(palavra => calcularSimilaridade(palavra, termo) > 0.7);
-            }
-            return false;
-        });
-        if(document.getElementById('titulo-secao')) document.getElementById('titulo-secao').innerText = `Resultados para: "${e.target.value}"`;
-        exibirProdutos(filtrados);
-    });
-}
 
 // --- TEMA ---
 const savedTheme = localStorage.getItem('lston_theme') || 'light';
@@ -90,13 +40,67 @@ onAuthStateChanged(auth, (user) => {
     }
 });
 
+// --- LÓGICA DE BUSCA APROXIMADA (FUZZY SEARCH) ---
+function calcularSimilaridade(s1, s2) {
+    let longer = s1.length < s2.length ? s2 : s1;
+    let shorter = s1.length < s2.length ? s1 : s2;
+    if (longer.length === 0) return 1.0;
+    return (longer.length - editDistance(longer, shorter)) / parseFloat(longer.length);
+}
+
+function editDistance(s1, s2) {
+    s1 = s1.toLowerCase(); s2 = s2.toLowerCase();
+    let costs = new Array();
+    for (let i = 0; i <= s1.length; i++) {
+        let lastValue = i;
+        for (let j = 0; j <= s2.length; j++) {
+            if (i == 0) costs[j] = j;
+            else {
+                if (j > 0) {
+                    let newValue = costs[j - 1];
+                    if (s1.charAt(i - 1) != s2.charAt(j - 1))
+                        newValue = Math.min(Math.min(newValue, lastValue), costs[j]) + 1;
+                    costs[j - 1] = lastValue;
+                    lastValue = newValue;
+                }
+            }
+        }
+        if (i > 0) costs[s2.length] = lastValue;
+    }
+    return costs[s2.length];
+}
+
+const campoBusca = document.getElementById('campo-busca');
+if (campoBusca) {
+    campoBusca.addEventListener('input', (e) => {
+        const termo = e.target.value.toLowerCase();
+        if (termo.length < 2) { 
+            exibirProdutos(todosProdutos); 
+            if(document.getElementById('titulo-secao')) document.getElementById('titulo-secao').innerText = "Destaques";
+            return; 
+        }
+        const filtrados = todosProdutos.filter(p => {
+            const nome = p.nome.toLowerCase();
+            const cat = (p.categoria || "").toLowerCase();
+            if (nome.includes(termo) || cat.includes(termo)) return true;
+            if (termo.length > 3) {
+                const palavrasNome = nome.split(" ");
+                return palavrasNome.some(palavra => calcularSimilaridade(palavra, termo) > 0.7);
+            }
+            return false;
+        });
+        if(document.getElementById('titulo-secao')) document.getElementById('titulo-secao').innerText = `Resultados para: "${e.target.value}"`;
+        exibirProdutos(filtrados);
+    });
+}
+
 // --- CARROSSEL ---
 let slideIndex = 0;
 async function carregarBanners() {
     try {
         const q = await getDocs(collection(db, "banners"));
         const c = document.getElementById('slider');
-        if (q.empty || !c) return; 
+        if (q.empty) return; 
         let h=''; 
         q.forEach(d=>{const b=d.data(); h+=`<div class="slide" style="background-image: url('${b.img}');"><div class="slide-content"><h2>${b.titulo}</h2><p>${b.subtitulo}</p></div></div>`;}); 
         c.innerHTML=h; 
@@ -171,6 +175,7 @@ function exibirProdutos(lista) {
     });
 }
 
+// --- FUNÇÕES DE QUANTIDADE E CARRINHO (A Lógica Robusta) ---
 window.alterarQtdCard = (btn, delta) => {
     const input = btn.parentNode.querySelector('input');
     let val = parseInt(input.value) + delta;
@@ -192,7 +197,7 @@ function adicionarAoCarrinho(produto, qtd = 1) {
     const qtdNoCarrinho = itemExistente ? itemExistente.qtd : 0;
     
     if (qtdNoCarrinho + qtd > estoqueDisponivel) {
-        window.showToast(`Estoque insuficiente! Você já tem ${qtdNoCarrinho} no carrinho e o limite é ${estoqueDisponivel}.`, "error");
+        window.showToast(`Estoque insuficiente! Limite de ${estoqueDisponivel}.`, "error");
         return;
     }
 
@@ -208,6 +213,46 @@ function adicionarAoCarrinho(produto, qtd = 1) {
     window.toggleCarrinho();
 }
 
+window.alterarQtdCarrinho = (index, delta) => {
+    const item = carrinho[index];
+    const estoqueDisponivel = parseInt(item.estoque) || 0;
+    if (delta > 0 && item.qtd + delta > estoqueDisponivel) {
+        window.showToast("Limite de estoque atingido!", "error");
+        return;
+    }
+    item.qtd += delta;
+    if(item.qtd < 1) carrinho.splice(index, 1);
+    localStorage.setItem('lston_carrinho', JSON.stringify(carrinho));
+    atualizarCarrinhoUI();
+}
+
+// --- NOVO: CÁLCULO DE FRETE NO CARRINHO ---
+window.calcularFreteCarrinho = async () => {
+    const cepInput = document.getElementById('cart-cep-input');
+    const resultDiv = document.getElementById('cart-frete-result');
+    const cep = cepInput.value.replace(/\D/g, '');
+
+    if (cep.length !== 8) {
+        resultDiv.innerText = "CEP inválido.";
+        resultDiv.style.color = "red";
+        return;
+    }
+
+    resultDiv.innerText = "Calculando...";
+    window.toggleLoading(true);
+
+    // Simulação de frete (R$ 15 a 40)
+    setTimeout(() => {
+        freteValor = Math.floor(Math.random() * (40 - 15 + 1) + 15);
+        resultDiv.innerHTML = `Frete: <strong>${window.fmtMoney(freteValor)}</strong> (5-7 dias)`;
+        resultDiv.style.color = "var(--green-color)";
+        localStorage.setItem('lston_cep', cepInput.value);
+        
+        atualizarCarrinhoUI(); // Atualiza total
+        window.toggleLoading(false);
+    }, 1000);
+}
+
 function atualizarCarrinhoUI() {
     const count = document.getElementById('cart-count');
     if(count) { 
@@ -220,7 +265,10 @@ function atualizarCarrinhoUI() {
 
     let subtotal = 0; 
     lista.innerHTML = '';
-    if(carrinho.length === 0) lista.innerHTML = '<p style="text-align:center; padding:20px; color:#999;">Vazio.</p>';
+    
+    if(carrinho.length === 0) {
+        lista.innerHTML = '<p style="text-align:center; padding:20px; color:#999;">Seu carrinho está vazio.</p>';
+    }
 
     carrinho.forEach((item, index) => {
         subtotal += parseFloat(item.preco) * item.qtd;
@@ -242,22 +290,23 @@ function atualizarCarrinhoUI() {
             </div>`;
     });
     
-    const total = subtotal - (subtotal * desconto);
-    const texto = desconto > 0 ? `De: <s>${window.fmtMoney(subtotal)}</s> Por: ${window.fmtMoney(total)}` : window.fmtMoney(total);
+    // Cálculo do total com desconto e frete
+    let total = subtotal - (subtotal * desconto);
+    total += freteValor;
+
+    let texto = "";
+    if(freteValor > 0) {
+        texto = `Total: ${window.fmtMoney(total)} <small style="font-size:12px">(c/ frete)</small>`;
+    } else {
+        texto = `Total: ${window.fmtMoney(total)}`;
+    }
+    
     if(document.getElementById('cart-total')) document.getElementById('cart-total').innerHTML = texto;
 }
 
-window.alterarQtdCarrinho = (index, delta) => {
-    const item = carrinho[index];
-    const estoque = parseInt(item.estoque) || 0;
-    if (delta > 0 && item.qtd + delta > estoque) { window.showToast("Limite de estoque!", "error"); return; }
-    item.qtd += delta;
-    if(item.qtd < 1) carrinho.splice(index, 1);
-    localStorage.setItem('lston_carrinho', JSON.stringify(carrinho));
-    atualizarCarrinhoUI();
-}
-window.removerDoCarrinho = (index) => { carrinho.splice(index, 1); localStorage.setItem('lston_carrinho', JSON.stringify(carrinho)); atualizarCarrinhoUI(); }
+// --- OUTRAS FUNÇÕES (Mantidas) ---
 window.toggleCarrinho = () => { const m = document.getElementById('carrinho-modal'); m.style.display = (m.style.display === 'flex') ? 'none' : 'flex'; if(m.style.display==='flex') atualizarCarrinhoUI(); }
+window.removerDoCarrinho = (index) => { carrinho.splice(index, 1); localStorage.setItem('lston_carrinho', JSON.stringify(carrinho)); atualizarCarrinhoUI(); }
 window.filtrarPorPreco = () => { const min = parseFloat(document.getElementById('price-min').value)||0; const max = parseFloat(document.getElementById('price-max').value)||Infinity; exibirProdutos(todosProdutos.filter(p => p.preco >= min && p.preco <= max)); }
 window.ordenarProdutos = () => { const t = document.getElementById('sort-select').value; let l = [...todosProdutos]; if(t==='menor') l.sort((a,b)=>a.preco-b.preco); if(t==='maior') l.sort((a,b)=>b.preco-a.preco); exibirProdutos(l); }
 window.filtrarCategoria = (cat) => { document.getElementById('titulo-secao').innerText = cat; exibirProdutos(cat==='Todas'?todosProdutos:todosProdutos.filter(p=>p.categoria===cat)); }
@@ -288,17 +337,16 @@ window.confirmarPedido = async () => {
     window.toggleLoading(true);
     try {
         let total = 0; carrinho.forEach(i => total += parseFloat(i.preco) * i.qtd);
-        total = total - (total * desconto);
+        total = total - (total * desconto) + freteValor; // Total com desconto e frete
         await addDoc(collection(db, "pedidos"), { cliente: nome, endereco, itens: carrinho, total, data: new Date().toISOString(), status: "Recebido", userEmail: currentUserEmail });
         for (const item of carrinho) {
             const ref = doc(db, "produtos", item.id);
-            const nv = (parseInt(item.estoque) || 0) - item.qtd; 
+            const nv = parseInt(item.estoque) - item.qtd; 
             if (nv >= 0) await updateDoc(ref, { estoque: nv });
         }
         window.showToast("Sucesso!"); carrinho=[]; localStorage.setItem('lston_carrinho', '[]'); atualizarCarrinhoUI(); window.location.href="index.html";
     } catch(e){ window.showToast("Erro", "error"); } finally { window.toggleLoading(false); }
 }
-
 window.buscarCep = async () => {
     const cep = document.getElementById('check-cep').value.replace(/\D/g, '');
     if(cep.length !== 8) return;
@@ -309,6 +357,6 @@ window.buscarCep = async () => {
         if(!data.erro) { document.getElementById('check-endereco').value = `${data.logradouro}, ${data.bairro}`; document.getElementById('check-cidade').value = `${data.localidade}/${data.uf}`; window.showToast("Endereço encontrado!"); }
     } catch(e) {} finally { window.toggleLoading(false); }
 }
+window.assinarNews = async () => { const email = document.getElementById('news-email').value; if(email) { await addDoc(collection(db, "newsletter"), { email, data: new Date() }); window.showToast("Inscrito!"); } }
 
-carregarLoja(); 
-atualizarCarrinhoUI();
+carregarLoja(); atualizarCarrinhoUI();
