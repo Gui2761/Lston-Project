@@ -12,13 +12,23 @@ const container = document.getElementById('products-container');
 
 // --- TABELA DE FRETE REAL (Por Estado) ---
 const TABELA_FRETE = {
-    'SP': { base: 12.00, adicional: 1.00, prazo: '2-4 dias' },
-    'RJ': { base: 15.00, adicional: 1.50, prazo: '3-5 dias' },
-    'MG': { base: 16.00, adicional: 1.50, prazo: '3-6 dias' },
-    'ES': { base: 18.00, adicional: 2.00, prazo: '4-7 dias' },
-    'SUL': { base: 22.00, adicional: 2.50, prazo: '5-8 dias' }, // PR, SC, RS
-    'NORDESTE': { base: 28.00, adicional: 3.00, prazo: '8-12 dias' },
-    'PADRAO': { base: 35.00, adicional: 5.00, prazo: '10-15 dias' } // Resto do Brasil
+    // Local (Aracaju e Sergipe) - Mais barato e rápido
+    'SE': { base: 10.00, adicional: 0.50, prazo: '1-2 dias' },
+    
+    // Nordeste (Vizinhos) - Preço médio
+    'BA': { base: 18.00, adicional: 1.00, prazo: '3-5 dias' },
+    'AL': { base: 18.00, adicional: 1.00, prazo: '3-5 dias' },
+    'PE': { base: 20.00, adicional: 1.00, prazo: '4-6 dias' },
+    'NORDESTE': { base: 22.00, adicional: 1.50, prazo: '5-8 dias' }, // Outros do NE
+    
+    // Sudeste/Sul (Longe de Aracaju) - Mais caro
+    'SP': { base: 30.00, adicional: 2.00, prazo: '7-10 dias' },
+    'RJ': { base: 32.00, adicional: 2.00, prazo: '7-10 dias' },
+    'MG': { base: 30.00, adicional: 2.00, prazo: '6-9 dias' },
+    'SUL': { base: 40.00, adicional: 3.00, prazo: '8-15 dias' }, // PR, SC, RS
+    
+    // Resto do Brasil
+    'PADRAO': { base: 35.00, adicional: 5.00, prazo: '10-20 dias' }
 };
 
 // --- HELPERS ---
@@ -235,7 +245,7 @@ window.alterarQtdCarrinho = (index, delta) => {
     atualizarCarrinhoUI();
 }
 
-// --- CÁLCULO DE FRETE REAL (NOVA LÓGICA) ---
+// --- CÁLCULO DE FRETE REAL (NOVA LÓGICA COM BASE EM ARACAJU) ---
 window.calcularFreteCarrinho = async () => {
     const cepInput = document.getElementById('cart-cep-input');
     const resultDiv = document.getElementById('cart-frete-result');
@@ -265,7 +275,7 @@ window.calcularFreteCarrinho = async () => {
             // Verifica regiões agrupadas (SUL e NORDESTE)
             if (!regra) {
                 if (['PR', 'SC', 'RS'].includes(uf)) regra = TABELA_FRETE['SUL'];
-                else if (['BA', 'PE', 'CE', 'MA', 'RN', 'PB', 'AL', 'SE', 'PI'].includes(uf)) regra = TABELA_FRETE['NORDESTE'];
+                else if (['MA', 'CE', 'RN', 'PB', 'PI'].includes(uf)) regra = TABELA_FRETE['NORDESTE'];
                 else regra = TABELA_FRETE['PADRAO'];
             }
 
@@ -354,61 +364,9 @@ window.filtrarFavoritos = () => { document.getElementById('titulo-secao').innerT
 window.irParaCheckout = () => { document.getElementById('etapa-carrinho').style.display='none'; document.getElementById('etapa-checkout').style.display='flex'; }
 window.voltarParaCarrinho = () => { document.getElementById('etapa-checkout').style.display='none'; document.getElementById('etapa-carrinho').style.display='block'; }
 
-window.aplicarCupom = async () => {
-    const codigo = document.getElementById('cupom-input').value.toUpperCase();
-    window.toggleLoading(true);
-    try {
-        const q = query(collection(db, "cupons"), where("codigo", "==", codigo));
-        const snap = await getDocs(q);
-        if (!snap.empty) {
-            const cupom = snap.docs[0].data();
-            if(cupom.validade && new Date() > new Date(cupom.validade)) window.showToast("Expirado!", "error");
-            else { desconto = cupom.desconto / 100; window.showToast(`-${cupom.desconto}% aplicado!`); }
-        } else { desconto = 0; window.showToast("Inválido", "error"); }
-        atualizarCarrinhoUI();
-    } catch(e) { window.showToast("Erro", "error"); } finally { window.toggleLoading(false); }
-}
-
-window.confirmarPedido = async () => {
-    const nome = document.getElementById('check-nome').value;
-    const endereco = document.getElementById('check-endereco').value;
-    if(!nome || !endereco) return window.showToast("Preencha tudo!", "error");
-    window.toggleLoading(true);
-    try {
-        let total = 0; carrinho.forEach(i => total += parseFloat(i.preco) * i.qtd);
-        // Aplica desconto e SOMA o frete ao total do pedido no banco de dados
-        total = (total - (total * desconto)) + freteValor; 
-        
-        await addDoc(collection(db, "pedidos"), { 
-            cliente: nome, 
-            endereco, 
-            itens: carrinho, 
-            total, 
-            frete: freteValor, // Salva o frete separadamente também para controle
-            data: new Date().toISOString(), 
-            status: "Recebido", 
-            userEmail: currentUserEmail 
-        });
-        
-        for (const item of carrinho) {
-            const ref = doc(db, "produtos", item.id);
-            const nv = parseInt(item.estoque) - item.qtd; 
-            if (nv >= 0) await updateDoc(ref, { estoque: nv });
-        }
-        window.showToast("Sucesso!"); carrinho=[]; localStorage.setItem('lston_carrinho', '[]'); atualizarCarrinhoUI(); window.location.href="index.html";
-    } catch(e){ window.showToast("Erro", "error"); } finally { window.toggleLoading(false); }
-}
-
-window.buscarCep = async () => {
-    const cep = document.getElementById('check-cep').value.replace(/\D/g, '');
-    if(cep.length !== 8) return;
-    window.toggleLoading(true);
-    try {
-        const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
-        const data = await res.json();
-        if(!data.erro) { document.getElementById('check-endereco').value = `${data.logradouro}, ${data.bairro}`; document.getElementById('check-cidade').value = `${data.localidade}/${data.uf}`; window.showToast("Endereço encontrado!"); }
-    } catch(e) {} finally { window.toggleLoading(false); }
-}
+window.aplicarCupom = async () => { const codigo = document.getElementById('cupom-input').value.toUpperCase(); window.toggleLoading(true); try { const q = query(collection(db, "cupons"), where("codigo", "==", codigo)); const snap = await getDocs(q); if (!snap.empty) { const cupom = snap.docs[0].data(); if(cupom.validade && new Date() > new Date(cupom.validade)) window.showToast("Expirado!", "error"); else { desconto = cupom.desconto / 100; window.showToast(`-${cupom.desconto}% aplicado!`); } } else { desconto = 0; window.showToast("Inválido", "error"); } atualizarCarrinhoUI(); } catch(e) { window.showToast("Erro", "error"); } finally { window.toggleLoading(false); } }
+window.confirmarPedido = async () => { const nome = document.getElementById('check-nome').value; const endereco = document.getElementById('check-endereco').value; if(!nome || !endereco) return window.showToast("Preencha tudo!", "error"); window.toggleLoading(true); try { let total = 0; carrinho.forEach(i => total += parseFloat(i.preco) * i.qtd); total = (total - (total * desconto)) + freteValor; await addDoc(collection(db, "pedidos"), { cliente: nome, endereco, itens: carrinho, total, data: new Date().toISOString(), status: "Recebido", userEmail: currentUserEmail }); for (const item of carrinho) { const ref = doc(db, "produtos", item.id); const nv = (parseInt(item.estoque) || 0) - item.qtd; if (nv >= 0) await updateDoc(ref, { estoque: nv }); } window.showToast("Sucesso!"); carrinho=[]; localStorage.setItem('lston_carrinho', '[]'); atualizarCarrinhoUI(); window.location.href="index.html"; } catch(e){ window.showToast("Erro", "error"); } finally { window.toggleLoading(false); } }
+window.buscarCep = async () => { const cep = document.getElementById('check-cep').value.replace(/\D/g, ''); if(cep.length !== 8) return; window.toggleLoading(true); try { const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`); const data = await res.json(); if(!data.erro) { document.getElementById('check-endereco').value = `${data.logradouro}, ${data.bairro}`; document.getElementById('check-cidade').value = `${data.localidade}/${data.uf}`; window.showToast("Endereço encontrado!"); } } catch(e) {} finally { window.toggleLoading(false); } }
 window.assinarNews = async () => { const email = document.getElementById('news-email').value; if(email) { await addDoc(collection(db, "newsletter"), { email, data: new Date() }); window.showToast("Inscrito!"); } }
 
 carregarLoja(); atualizarCarrinhoUI();
