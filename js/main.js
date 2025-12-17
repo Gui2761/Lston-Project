@@ -1,16 +1,17 @@
 import { db, auth } from "./firebaseConfig.js";
-import { collection, getDocs, addDoc, doc, updateDoc, query, where } from "firebase/firestore";
+import { collection, getDocs, addDoc, doc, updateDoc, query, where, getDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 
 let carrinho = JSON.parse(localStorage.getItem('lston_carrinho')) || []; 
 let favoritos = JSON.parse(localStorage.getItem('lston_favoritos')) || [];
 let todosProdutos = []; 
 let desconto = 0;
-let freteValor = 0; // Valor do frete calculado
+let freteValor = 0; 
 let currentUserEmail = null;
+let currentUserId = null; // Variável para guardar o ID do utilizador
 const container = document.getElementById('products-container');
 
-// --- TABELA DE FRETE REAL (Por Estado) ---
+// --- TABELA DE FRETE (ORIGEM: ARACAJU/SE) ---
 const TABELA_FRETE = {
     // Local (Aracaju e Sergipe) - Mais barato e rápido
     'SE': { base: 10.00, adicional: 0.50, prazo: '1-2 dias' },
@@ -19,13 +20,13 @@ const TABELA_FRETE = {
     'BA': { base: 18.00, adicional: 1.00, prazo: '3-5 dias' },
     'AL': { base: 18.00, adicional: 1.00, prazo: '3-5 dias' },
     'PE': { base: 20.00, adicional: 1.00, prazo: '4-6 dias' },
-    'NORDESTE': { base: 22.00, adicional: 1.50, prazo: '5-8 dias' }, // Outros do NE
+    'NORDESTE': { base: 22.00, adicional: 1.50, prazo: '5-8 dias' }, 
     
     // Sudeste/Sul (Longe de Aracaju) - Mais caro
     'SP': { base: 30.00, adicional: 2.00, prazo: '7-10 dias' },
     'RJ': { base: 32.00, adicional: 2.00, prazo: '7-10 dias' },
     'MG': { base: 30.00, adicional: 2.00, prazo: '6-9 dias' },
-    'SUL': { base: 40.00, adicional: 3.00, prazo: '8-15 dias' }, // PR, SC, RS
+    'SUL': { base: 40.00, adicional: 3.00, prazo: '8-15 dias' },
     
     // Resto do Brasil
     'PADRAO': { base: 35.00, adicional: 5.00, prazo: '10-20 dias' }
@@ -56,12 +57,13 @@ window.toggleTheme = () => {
 onAuthStateChanged(auth, (user) => {
     if (user) {
         currentUserEmail = user.email;
+        currentUserId = user.uid; // Guarda o UID para buscar dados no checkout
         const userDisplay = document.getElementById('user-name');
         if(userDisplay) userDisplay.innerText = user.email.split('@')[0];
     }
 });
 
-// --- LÓGICA DE BUSCA INTELIGENTE (FUZZY SEARCH) ---
+// --- BUSCA INTELIGENTE (FUZZY) ---
 function calcularSimilaridade(s1, s2) {
     let longer = s1.length < s2.length ? s2 : s1;
     let shorter = s1.length < s2.length ? s1 : s2;
@@ -103,9 +105,7 @@ if (campoBusca) {
         const filtrados = todosProdutos.filter(p => {
             const nome = p.nome.toLowerCase();
             const cat = (p.categoria || "").toLowerCase();
-            // 1. Busca exata
             if (nome.includes(termo) || cat.includes(termo)) return true;
-            // 2. Busca aproximada (Fuzzy)
             if (termo.length > 3) {
                 const palavrasNome = nome.split(" ");
                 return palavrasNome.some(palavra => calcularSimilaridade(palavra, termo) > 0.7);
@@ -123,7 +123,7 @@ async function carregarBanners() {
     try {
         const q = await getDocs(collection(db, "banners"));
         const c = document.getElementById('slider');
-        if (q.empty || !c) return; 
+        if (q.empty) return; 
         let h=''; 
         q.forEach(d=>{const b=d.data(); h+=`<div class="slide" style="background-image: url('${b.img}');"><div class="slide-content"><h2>${b.titulo}</h2><p>${b.subtitulo}</p></div></div>`;}); 
         c.innerHTML=h; 
@@ -245,7 +245,7 @@ window.alterarQtdCarrinho = (index, delta) => {
     atualizarCarrinhoUI();
 }
 
-// --- CÁLCULO DE FRETE REAL (NOVA LÓGICA COM BASE EM ARACAJU) ---
+// --- CÁLCULO DE FRETE REAL (BASE ARACAJU/SE) ---
 window.calcularFreteCarrinho = async () => {
     const cepInput = document.getElementById('cart-cep-input');
     const resultDiv = document.getElementById('cart-frete-result');
@@ -268,18 +268,16 @@ window.calcularFreteCarrinho = async () => {
             resultDiv.innerText = "CEP não encontrado.";
             resultDiv.style.color = "red";
         } else {
-            // Lógica Real baseada na Tabela
             const uf = data.uf;
-            let regra = TABELA_FRETE[uf];
             
-            // Verifica regiões agrupadas (SUL e NORDESTE)
+            // Lógica de Tabela
+            let regra = TABELA_FRETE[uf];
             if (!regra) {
                 if (['PR', 'SC', 'RS'].includes(uf)) regra = TABELA_FRETE['SUL'];
                 else if (['MA', 'CE', 'RN', 'PB', 'PI'].includes(uf)) regra = TABELA_FRETE['NORDESTE'];
                 else regra = TABELA_FRETE['PADRAO'];
             }
 
-            // Cálculo: Base + (Adicional * (Quantidade - 1))
             const qtdTotal = carrinho.reduce((acc, item) => acc + item.qtd, 0);
             freteValor = regra.base + (regra.adicional * Math.max(0, qtdTotal - 1));
 
@@ -287,12 +285,9 @@ window.calcularFreteCarrinho = async () => {
             resultDiv.style.color = "var(--green-color)";
             
             localStorage.setItem('lston_cep', cepInput.value);
-            
-            // Atualiza o total com o novo valor de frete
             atualizarCarrinhoUI();
         }
     } catch (e) {
-        console.error(e);
         resultDiv.innerText = "Erro ao calcular.";
         resultDiv.style.color = "red";
     } finally {
@@ -339,7 +334,7 @@ function atualizarCarrinhoUI() {
             </div>`;
     });
     
-    // Total Final: Subtotal - Desconto + Frete
+    // Total com Frete e Desconto
     let total = subtotal - (subtotal * desconto);
     total += freteValor;
 
@@ -353,7 +348,7 @@ function atualizarCarrinhoUI() {
     if(document.getElementById('cart-total')) document.getElementById('cart-total').innerHTML = texto;
 }
 
-// --- OUTRAS FUNÇÕES (Mantidas) ---
+// --- OUTRAS FUNÇÕES ---
 window.toggleCarrinho = () => { const m = document.getElementById('carrinho-modal'); m.style.display = (m.style.display === 'flex') ? 'none' : 'flex'; if(m.style.display==='flex') atualizarCarrinhoUI(); }
 window.removerDoCarrinho = (index) => { carrinho.splice(index, 1); localStorage.setItem('lston_carrinho', JSON.stringify(carrinho)); atualizarCarrinhoUI(); }
 window.filtrarPorPreco = () => { const min = parseFloat(document.getElementById('price-min').value)||0; const max = parseFloat(document.getElementById('price-max').value)||Infinity; exibirProdutos(todosProdutos.filter(p => p.preco >= min && p.preco <= max)); }
@@ -361,12 +356,86 @@ window.ordenarProdutos = () => { const t = document.getElementById('sort-select'
 window.filtrarCategoria = (cat) => { document.getElementById('titulo-secao').innerText = cat; exibirProdutos(cat==='Todas'?todosProdutos:todosProdutos.filter(p=>p.categoria===cat)); }
 window.toggleFavorito = (id, el, e) => { e.stopPropagation(); if(favoritos.includes(id)) { favoritos = favoritos.filter(f=>f!==id); el.className='far fa-heart fav-btn'; window.showToast("Removido"); } else { favoritos.push(id); el.className='fas fa-heart fav-btn active'; window.showToast("Favoritado!"); } localStorage.setItem('lston_favoritos', JSON.stringify(favoritos)); }
 window.filtrarFavoritos = () => { document.getElementById('titulo-secao').innerText="Favoritos"; exibirProdutos(todosProdutos.filter(p=>favoritos.includes(p.id))); }
-window.irParaCheckout = () => { document.getElementById('etapa-carrinho').style.display='none'; document.getElementById('etapa-checkout').style.display='flex'; }
+
+// --- CHECKOUT INTELIGENTE (AUTO-PREENCHIMENTO) ---
+window.irParaCheckout = async () => { 
+    document.getElementById('etapa-carrinho').style.display='none'; 
+    document.getElementById('etapa-checkout').style.display='flex'; 
+    
+    if(currentUserId) {
+        try {
+            const docRef = doc(db, "users", currentUserId);
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+                const dados = docSnap.data();
+                if(dados.nome) document.getElementById('check-nome').value = dados.nome;
+                if(dados.cep) document.getElementById('check-cep').value = dados.cep;
+                if(dados.endereco && dados.numero) document.getElementById('check-endereco').value = `${dados.endereco}, ${dados.numero}`;
+                else if(dados.endereco) document.getElementById('check-endereco').value = dados.endereco;
+                if(dados.cidade) document.getElementById('check-cidade').value = dados.cidade;
+            }
+        } catch(e) { console.log("Erro ao preencher dados", e); }
+    }
+}
+
 window.voltarParaCarrinho = () => { document.getElementById('etapa-checkout').style.display='none'; document.getElementById('etapa-carrinho').style.display='block'; }
 
-window.aplicarCupom = async () => { const codigo = document.getElementById('cupom-input').value.toUpperCase(); window.toggleLoading(true); try { const q = query(collection(db, "cupons"), where("codigo", "==", codigo)); const snap = await getDocs(q); if (!snap.empty) { const cupom = snap.docs[0].data(); if(cupom.validade && new Date() > new Date(cupom.validade)) window.showToast("Expirado!", "error"); else { desconto = cupom.desconto / 100; window.showToast(`-${cupom.desconto}% aplicado!`); } } else { desconto = 0; window.showToast("Inválido", "error"); } atualizarCarrinhoUI(); } catch(e) { window.showToast("Erro", "error"); } finally { window.toggleLoading(false); } }
-window.confirmarPedido = async () => { const nome = document.getElementById('check-nome').value; const endereco = document.getElementById('check-endereco').value; if(!nome || !endereco) return window.showToast("Preencha tudo!", "error"); window.toggleLoading(true); try { let total = 0; carrinho.forEach(i => total += parseFloat(i.preco) * i.qtd); total = (total - (total * desconto)) + freteValor; await addDoc(collection(db, "pedidos"), { cliente: nome, endereco, itens: carrinho, total, data: new Date().toISOString(), status: "Recebido", userEmail: currentUserEmail }); for (const item of carrinho) { const ref = doc(db, "produtos", item.id); const nv = (parseInt(item.estoque) || 0) - item.qtd; if (nv >= 0) await updateDoc(ref, { estoque: nv }); } window.showToast("Sucesso!"); carrinho=[]; localStorage.setItem('lston_carrinho', '[]'); atualizarCarrinhoUI(); window.location.href="index.html"; } catch(e){ window.showToast("Erro", "error"); } finally { window.toggleLoading(false); } }
-window.buscarCep = async () => { const cep = document.getElementById('check-cep').value.replace(/\D/g, ''); if(cep.length !== 8) return; window.toggleLoading(true); try { const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`); const data = await res.json(); if(!data.erro) { document.getElementById('check-endereco').value = `${data.logradouro}, ${data.bairro}`; document.getElementById('check-cidade').value = `${data.localidade}/${data.uf}`; window.showToast("Endereço encontrado!"); } } catch(e) {} finally { window.toggleLoading(false); } }
+window.aplicarCupom = async () => {
+    const codigo = document.getElementById('cupom-input').value.toUpperCase();
+    window.toggleLoading(true);
+    try {
+        const q = query(collection(db, "cupons"), where("codigo", "==", codigo));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+            const cupom = snap.docs[0].data();
+            if(cupom.validade && new Date() > new Date(cupom.validade)) window.showToast("Expirado!", "error");
+            else { desconto = cupom.desconto / 100; window.showToast(`-${cupom.desconto}% aplicado!`); }
+        } else { desconto = 0; window.showToast("Inválido", "error"); }
+        atualizarCarrinhoUI();
+    } catch(e) { window.showToast("Erro", "error"); } finally { window.toggleLoading(false); }
+}
+
+window.confirmarPedido = async () => {
+    const nome = document.getElementById('check-nome').value;
+    const endereco = document.getElementById('check-endereco').value;
+    if(!nome || !endereco) return window.showToast("Preencha tudo!", "error");
+    window.toggleLoading(true);
+    try {
+        let total = 0; carrinho.forEach(i => total += parseFloat(i.preco) * i.qtd);
+        // Aplica desconto e SOMA o frete ao total
+        total = (total - (total * desconto)) + freteValor; 
+        
+        await addDoc(collection(db, "pedidos"), { 
+            cliente: nome, 
+            endereco, 
+            itens: carrinho, 
+            total, 
+            frete: freteValor, 
+            data: new Date().toISOString(), 
+            status: "Recebido", 
+            userEmail: currentUserEmail 
+        });
+        
+        for (const item of carrinho) {
+            const ref = doc(db, "produtos", item.id);
+            const nv = parseInt(item.estoque) - item.qtd; 
+            if (nv >= 0) await updateDoc(ref, { estoque: nv });
+        }
+        window.showToast("Sucesso!"); carrinho=[]; localStorage.setItem('lston_carrinho', '[]'); atualizarCarrinhoUI(); window.location.href="index.html";
+    } catch(e){ window.showToast("Erro", "error"); } finally { window.toggleLoading(false); }
+}
+
+window.buscarCep = async () => {
+    const cep = document.getElementById('check-cep').value.replace(/\D/g, '');
+    if(cep.length !== 8) return;
+    window.toggleLoading(true);
+    try {
+        const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+        const data = await res.json();
+        if(!data.erro) { document.getElementById('check-endereco').value = `${data.logradouro}, ${data.bairro}`; document.getElementById('check-cidade').value = `${data.localidade}/${data.uf}`; window.showToast("Endereço encontrado!"); }
+    } catch(e) {} finally { window.toggleLoading(false); }
+}
 window.assinarNews = async () => { const email = document.getElementById('news-email').value; if(email) { await addDoc(collection(db, "newsletter"), { email, data: new Date() }); window.showToast("Inscrito!"); } }
 
-carregarLoja(); atualizarCarrinhoUI();
+carregarLoja(); 
+atualizarCarrinhoUI();

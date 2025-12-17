@@ -8,6 +8,7 @@
     
     <link rel="stylesheet" href="css/global.css">
     <link rel="stylesheet" href="css/perfil.css">
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
 
     <script type="importmap"> { "imports": { "firebase/app": "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js", "firebase/auth": "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js", "firebase/firestore": "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js", "firebase/storage": "https://www.gstatic.com/firebasejs/10.13.0/firebase-storage.js" } } </script>
 </head>
@@ -28,12 +29,31 @@
             <p>Bem-vindo, <strong id="user-email-display">...</strong></p>
         </div>
 
+        <div class="user-data-section" style="background:var(--bg-secondary); padding:20px; border-radius:12px; margin-bottom:30px; border:1px solid var(--border-color);">
+            <h3 style="margin-bottom:15px; color:var(--text-color);">Meus Dados de Entrega</h3>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px;">
+                <input type="text" id="perfil-nome" placeholder="Nome Completo" style="padding:10px; border-radius:6px; border:1px solid var(--border-color); background:var(--card-bg); color:var(--text-color);">
+                <input type="text" id="perfil-tel" placeholder="Telefone / WhatsApp" style="padding:10px; border-radius:6px; border:1px solid var(--border-color); background:var(--card-bg); color:var(--text-color);">
+            </div>
+            <div style="display:grid; grid-template-columns: 1fr 2fr 1fr; gap:15px; margin-top:15px;">
+                <input type="text" id="perfil-cep" placeholder="CEP" maxlength="9" oninput="mascaraCep(this)" style="padding:10px; border-radius:6px; border:1px solid var(--border-color); background:var(--card-bg); color:var(--text-color);">
+                <input type="text" id="perfil-endereco" placeholder="Endereço (Rua, Av)" style="padding:10px; border-radius:6px; border:1px solid var(--border-color); background:var(--card-bg); color:var(--text-color);">
+                <input type="text" id="perfil-num" placeholder="Número" style="padding:10px; border-radius:6px; border:1px solid var(--border-color); background:var(--card-bg); color:var(--text-color);">
+            </div>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-top:15px;">
+                <input type="text" id="perfil-bairro" placeholder="Bairro" style="padding:10px; border-radius:6px; border:1px solid var(--border-color); background:var(--card-bg); color:var(--text-color);">
+                <input type="text" id="perfil-cidade" placeholder="Cidade/UF" style="padding:10px; border-radius:6px; border:1px solid var(--border-color); background:var(--card-bg); color:var(--text-color);">
+            </div>
+            <button onclick="salvarDadosPerfil()" style="margin-top:20px; width:100%; padding:12px; background:var(--accent-color); color:white; border:none; border-radius:6px; font-weight:bold; cursor:pointer;">Salvar Alterações</button>
+        </div>
+
         <h3 style="color:var(--text-color); margin-bottom:15px;">Histórico de Pedidos</h3>
         <div id="lista-meus-pedidos">
             <p style="color:var(--text-muted);">Carregando pedidos...</p>
         </div>
     </main>
 
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
     <script type="module" src="js/perfil.js"></script>
 </body>
 </html>
