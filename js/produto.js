@@ -12,21 +12,28 @@ let carrinho = JSON.parse(localStorage.getItem('lston_carrinho')) || [];
 let favoritos = JSON.parse(localStorage.getItem('lston_favoritos')) || [];
 let currentUserEmail = null;
 
-// Helpers
+// --- HELPERS ---
 window.showToast = (msg, type='success') => { if(typeof Toastify !== 'undefined') Toastify({ text: msg, duration: 3000, style: { background: type==='error'?"#e74c3c":"#2c3e50" } }).showToast(); else alert(msg); }
 window.fmtMoney = (val) => { return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val); }
 window.toggleLoading = (show) => { const el = document.getElementById('loading-overlay'); if(el) el.style.display = show ? 'flex' : 'none'; }
 window.mascaraCep = (el) => { el.value = el.value.replace(/\D/g, "").replace(/^(\d{5})(\d)/, "$1-$2"); };
 window.toggleMenu = () => { document.getElementById('nav-menu').classList.toggle('active'); }
-window.toggleTheme = () => { const b=document.body; const n=b.getAttribute('data-theme')==='dark'?'light':'dark'; b.setAttribute('data-theme', n); localStorage.setItem('lston_theme', n); document.getElementById('theme-toggle').className=n==='dark'?'fas fa-sun':'fas fa-moon'; }
 
+// TEMA
 const savedTheme = localStorage.getItem('lston_theme') || 'light';
 document.body.setAttribute('data-theme', savedTheme);
 if(document.getElementById('theme-toggle')) document.getElementById('theme-toggle').className = savedTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
 
+window.toggleTheme = () => { 
+    const b=document.body; const n=b.getAttribute('data-theme')==='dark'?'light':'dark'; 
+    b.setAttribute('data-theme', n); localStorage.setItem('lston_theme', n); 
+    document.getElementById('theme-toggle').className=n==='dark'?'fas fa-sun':'fas fa-moon'; 
+}
+
+// AUTH
 onAuthStateChanged(auth, (user) => { if (user) { currentUserEmail = user.email; document.getElementById('user-name').innerText = user.email.split('@')[0]; } });
 
-// --- FAVORITOS (MODAL - Adaptação para a página de produto) ---
+// --- FAVORITOS (MODAL) ---
 window.toggleFavoritosModal = () => {
     const m = document.getElementById('favoritos-modal');
     m.style.display = (m.style.display === 'flex') ? 'none' : 'flex';
@@ -56,13 +63,12 @@ function atualizarFavoritosUI() {
     lista.innerHTML = '';
     if(favoritos.length === 0) { lista.innerHTML = '<p style="text-align:center; padding:20px;">Lista vazia.</p>'; return; }
     
-    // Nesta página, não temos "todosProdutos", então buscamos os favoritos no Firestore
+    // Busca detalhes dos favoritos (limitado a 10 para performance)
     carregarProdutosFavoritos(lista);
 }
 
 async function carregarProdutosFavoritos(listaEl) {
     if(favoritos.length === 0) return;
-    // Busca até 10 favoritos para não pesar (limitação do 'in')
     const idsParaBuscar = favoritos.slice(0, 10);
     const q = query(collection(db, "produtos"), where("__name__", "in", idsParaBuscar));
     const snap = await getDocs(q);
@@ -84,22 +90,20 @@ async function carregarProdutosFavoritos(listaEl) {
     });
 }
 
-// Função auxiliar para adicionar direto do modal de favoritos (sem precisar do objeto completo)
+// Função auxiliar para o modal de favoritos
 window.adicionarComQtdDireto = (id, qtd, img, nome, preco, estoque) => {
     const itemExistente = carrinho.find(p => p.id === id);
     if (itemExistente && itemExistente.qtd + qtd > estoque) { window.showToast("Estoque insuficiente!", "error"); return; }
     if (qtd > estoque) { window.showToast("Estoque insuficiente!", "error"); return; }
-
     if(itemExistente) { itemExistente.qtd += qtd; } 
     else { carrinho.push({ id, img, nome, preco, estoque, qtd }); }
-    
     localStorage.setItem('lston_carrinho', JSON.stringify(carrinho));
     window.showToast("Adicionado!"); atualizarCarrinhoUI();
 }
 
 // --- PRODUTO PRINCIPAL ---
 async function carregarProduto() {
-    if(!produtoId) { container.innerHTML = "<p>Produto não encontrado.</p>"; return; }
+    if(!produtoId) { container.innerHTML = "<p style='text-align:center;padding:50px;'>Produto não encontrado.</p>"; return; }
     try {
         const docRef = doc(db, "produtos", produtoId);
         const docSnap = await getDoc(docRef);
@@ -107,23 +111,21 @@ async function carregarProduto() {
             const prod = docSnap.data(); prod.id = docSnap.id;
             renderizarLayoutNovo(prod);
             carregarReviews(produtoId);
-            carregarRelacionados(prod.categoria); // Carrega Relacionados
+            carregarRelacionados(prod.categoria); // Carrega Venda Cruzada
         }
     } catch (e) { console.error(e); }
 }
 
-// --- PRODUTOS RELACIONADOS (VENDA CRUZADA) ---
+// --- RELACIONADOS ---
 async function carregarRelacionados(categoria) {
     if(!categoria || !relatedContainer) return;
-    // Busca produtos da mesma categoria, limita a 4
     const q = query(collection(db, "produtos"), where("categoria", "==", categoria), limit(5));
     const snap = await getDocs(q);
     relatedContainer.innerHTML = "";
-    
     let count = 0;
     snap.forEach(d => {
         const p = d.data();
-        if(d.id !== produtoId && count < 4) { // Ignora o produto atual e limita a 4
+        if(d.id !== produtoId && count < 4) { 
             count++;
             let img = (p.imagens && p.imagens.length > 0) ? p.imagens[0] : (p.img || '');
             relatedContainer.innerHTML += `
@@ -137,7 +139,6 @@ async function carregarRelacionados(categoria) {
                 </div>`;
         }
     });
-    
     if(count === 0) relatedContainer.innerHTML = "<p>Sem produtos relacionados.</p>";
 }
 
@@ -164,16 +165,17 @@ function renderizarLayoutNovo(prod) {
                     <div class="detail-qty-selector"><button onclick="alterarQtdDetail(-1)">-</button><input type="text" id="detail-qty" value="1" readonly><button onclick="alterarQtdDetail(1)">+</button></div>
                     <button id="btn-add-cart" class="btn-buy-big" ${btnDisabled}>${est===0?'Esgotado':'Adicionar ao Carrinho'}</button>
                     <button class="btn-share" onclick="navigator.clipboard.writeText(window.location.href);window.showToast('Link copiado!')">Compartilhar Link</button>
-                    <div class="shipping-calc"><input type="text" id="calc-cep" placeholder="CEP" oninput="mascaraCep(this)"><button onclick="calcularFrete()">OK</button><div id="frete-res"></div></div>
+                    <div class="shipping-calc"><label style="font-size:14px; font-weight:bold; color:var(--text-color)">Calcular Frete:</label><div class="shipping-input-group"><input type="text" id="calc-cep" placeholder="CEP" maxlength="9" oninput="mascaraCep(this)"><button onclick="calcularFrete()">OK</button></div><div id="frete-res" style="margin-top:10px; font-size:14px; color:var(--text-color);"></div></div>
                 </div>
             </div>
         </div>`;
     if(est > 0) document.getElementById('btn-add-cart').addEventListener('click', () => adicionarComQtdPagina(prod, imagens[0]));
 }
 
-// --- OUTRAS FUNÇÕES ---
+// --- FUNÇÕES DE CARRINHO (RESTAURADAS) ---
 window.trocarImagem = function(url, elemento) { document.getElementById('main-img-display').src = url; document.querySelectorAll('.thumb-box').forEach(el => el.style.border = '2px solid #eee'); if(elemento) elemento.style.border = '2px solid #2c3e50'; }
 window.alterarQtdDetail = (delta) => { const input = document.getElementById('detail-qty'); let val = parseInt(input.value) + delta; if(val < 1) val = 1; input.value = val; }
+
 function adicionarComQtdPagina(prod, img) {
     const qtdInput = document.getElementById('detail-qty');
     const qtd = parseInt(qtdInput.value);
@@ -185,11 +187,71 @@ function adicionarComQtdPagina(prod, img) {
     localStorage.setItem('lston_carrinho', JSON.stringify(carrinho));
     window.showToast("Adicionado!"); atualizarCarrinhoUI(); window.toggleCarrinho();
 }
-function atualizarCarrinhoUI() { const count = document.getElementById('cart-count'); if(count) { count.innerText = carrinho.reduce((acc, i) => acc + i.qtd, 0); count.style.display = carrinho.length > 0 ? 'block' : 'none'; } }
-window.toggleCarrinho = () => { document.getElementById('carrinho-modal').style.display = (document.getElementById('carrinho-modal').style.display === 'flex') ? 'none' : 'flex'; atualizarCarrinhoUI(); }
+
+function atualizarCarrinhoUI() {
+    const count = document.getElementById('cart-count');
+    if(count) { count.innerText = carrinho.reduce((acc, i) => acc + i.qtd, 0); count.style.display = carrinho.length > 0 ? 'block' : 'none'; }
+    const lista = document.getElementById('itens-carrinho');
+    if(!lista) return;
+    let subtotal = 0; lista.innerHTML = '';
+    if(carrinho.length === 0) lista.innerHTML = '<p style="text-align:center; padding:20px; color:#999;">Vazio.</p>';
+    carrinho.forEach((item, index) => {
+        subtotal += parseFloat(item.preco) * item.qtd;
+        lista.innerHTML += `<div class="cart-item"><div style="display:flex;align-items:center;"><img src="${item.img}"><div class="item-info"><strong>${item.nome}</strong><br>${window.fmtMoney(item.preco)}<div class="cart-qty-control"><button class="cart-qty-btn" onclick="alterarQtdCarrinho(${index}, -1)">-</button><span class="cart-qty-val">${item.qtd}</span><button class="cart-qty-btn" onclick="alterarQtdCarrinho(${index}, 1)">+</button></div></div></div><i class="fas fa-trash item-remove" onclick="window.removerDoCarrinho(${index})"></i></div>`;
+    });
+    if(document.getElementById('cart-total')) document.getElementById('cart-total').innerHTML = window.fmtMoney(subtotal);
+}
+
+// Funções de Gestão do Modal de Carrinho (RESTAURADAS)
+window.alterarQtdCarrinho = (index, delta) => {
+    const item = carrinho[index];
+    const estoque = parseInt(item.estoque) || 0;
+    if (delta > 0 && item.qtd + delta > estoque) { window.showToast("Limite de estoque!", "error"); return; }
+    item.qtd += delta;
+    if(item.qtd < 1) carrinho.splice(index, 1);
+    localStorage.setItem('lston_carrinho', JSON.stringify(carrinho));
+    atualizarCarrinhoUI();
+}
+window.removerDoCarrinho = (index) => { carrinho.splice(index, 1); localStorage.setItem('lston_carrinho', JSON.stringify(carrinho)); atualizarCarrinhoUI(); }
+window.toggleCarrinho = () => { 
+    const modal = document.getElementById('carrinho-modal');
+    modal.style.display = (modal.style.display === 'flex') ? 'none' : 'flex'; 
+    atualizarCarrinhoUI(); 
+}
+
+// Checkout Simplificado na Página do Produto (Redireciona para Home)
 window.irParaCheckout = () => { window.location.href = "index.html"; } 
-window.calcularFrete = async () => { const cep = document.getElementById('calc-cep').value.replace(/\D/g,''); const res = document.getElementById('frete-res'); res.innerText = "Calculando..."; try { const r = await fetch(`https://viacep.com.br/ws/${cep}/json/`); const d = await r.json(); if(d.erro) res.innerText="CEP inválido"; else res.innerHTML=`Frete para ${d.uf}: R$ 25,00 (Simulação)`; } catch(e){ res.innerText="Erro"; } }
-window.enviarReview = async () => { const t = document.getElementById('rev-text').value; if(!t) return window.showToast("Escreva algo!", "error"); await addDoc(reviewsCollection, { produtoId, texto:t, nome:document.getElementById('rev-name').value||'Anônimo', stars:document.getElementById('rev-stars').value, data:new Date() }); window.showToast("Enviado!"); document.getElementById('rev-text').value=''; carregarReviews(produtoId); }
-async function carregarReviews(pid) { const q = query(collection(db,"reviews"),where("produtoId","==",pid)); const s = await getDocs(q); const l = document.getElementById('reviews-list'); l.innerHTML=''; s.forEach(d=>{ const r=d.data(); l.innerHTML+=`<div class="review-item"><strong>${r.nome}</strong> (${r.stars}★)<p>${r.texto}</p></div>`; }); }
+window.voltarParaCarrinho = () => { document.getElementById('carrinho-modal').style.display='none'; } // Fecha se tentar voltar
+window.aplicarCupom = async () => { window.showToast("Use os cupons na página inicial.", "info"); }
+window.confirmarPedido = async () => { window.location.href = "index.html"; }
+
+// Frete da Página (Widget)
+window.calcularFrete = async () => { 
+    const cep = document.getElementById('calc-cep').value.replace(/\D/g,''); 
+    const res = document.getElementById('frete-res'); 
+    if(cep.length !== 8) { res.innerText="CEP inválido"; return; }
+    res.innerText = "Calculando..."; 
+    try { 
+        const r = await fetch(`https://viacep.com.br/ws/${cep}/json/`); 
+        const d = await r.json(); 
+        if(d.erro) res.innerText="CEP não encontrado"; 
+        else res.innerHTML=`Frete para ${d.uf}: R$ 25,00 (Simulação)`; 
+    } catch(e){ res.innerText="Erro"; } 
+}
+
+// --- REVIEWS ---
+window.enviarReview = async () => { 
+    const t = document.getElementById('rev-text').value; 
+    if(!t) return window.showToast("Escreva algo!", "error"); 
+    await addDoc(reviewsCollection, { produtoId, texto:t, nome:document.getElementById('rev-name').value||'Anônimo', stars:document.getElementById('rev-stars').value, data:new Date() }); 
+    window.showToast("Enviado!"); document.getElementById('rev-text').value=''; carregarReviews(produtoId); 
+}
+async function carregarReviews(pid) { 
+    const q = query(collection(db,"reviews"),where("produtoId","==",pid)); 
+    const s = await getDocs(q); 
+    const l = document.getElementById('reviews-list'); l.innerHTML=''; 
+    if (s.empty) { l.innerHTML = '<p style="color:var(--text-muted);">Seja o primeiro a avaliar!</p>'; return; }
+    s.forEach(d=>{ const r=d.data(); l.innerHTML+=`<div class="review-item"><strong>${r.nome}</strong> (${r.stars}★)<p>${r.texto}</p></div>`; }); 
+}
 
 carregarProduto(); atualizarCarrinhoUI(); atualizarFavoritosUI();
