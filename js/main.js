@@ -13,7 +13,7 @@ if(document.getElementById('theme-toggle')) {
 let carrinho = JSON.parse(localStorage.getItem('lston_carrinho')) || []; 
 let favoritos = JSON.parse(localStorage.getItem('lston_favoritos')) || []; 
 let todosProdutos = []; 
-let desconto = 0; // Desconto em porcentagem (0.10 = 10%)
+let desconto = 0;
 let freteValor = 0; 
 let currentUserEmail = null;
 let currentUserId = null;
@@ -38,7 +38,7 @@ window.fmtMoney = (val) => { return new Intl.NumberFormat('pt-BR', { style: 'cur
 window.toggleLoading = (show) => { const el = document.getElementById('loading-overlay'); if(el) el.style.display = show ? 'flex' : 'none'; }
 window.mascaraCep = (el) => { el.value = el.value.replace(/\D/g, "").replace(/^(\d{5})(\d)/, "$1-$2"); };
 
-// Máscara de Telefone
+
 window.mascaraTel = (el) => {
     let v = el.value.replace(/\D/g, "").substring(0, 11);
     v = v.replace(/^(\d{2})(\d)/g, "($1) $2");
@@ -73,7 +73,6 @@ onAuthStateChanged(auth, (user) => {
 async function carregarLoja() {
     if(container) container.innerHTML = '<p style="text-align:center; padding: 50px;">Carregando produtos...</p>';
     
-    // Inicia Contador de Visitas (Novo)
     contarVisita();
 
     carregarBanners().catch(err => console.error("Erro banner:", err));
@@ -89,7 +88,6 @@ async function carregarLoja() {
             return;
         }
 
-        // Limpeza de Favoritos Fantasmas
         const idsExistentes = todosProdutos.map(p => p.id);
         const totalAntes = favoritos.length;
         favoritos = favoritos.filter(id => idsExistentes.includes(id));
@@ -109,11 +107,9 @@ async function carregarLoja() {
 
 // --- NOVA FUNÇÃO: CONTADOR DE VISITAS ---
 async function contarVisita() {
-    // Verifica se já visitou nesta sessão para não contar F5 como nova visita
     if(sessionStorage.getItem('lston_visitou')) return;
     
     try {
-        // Incrementa contador no Firebase (Cria o doc 'stats/geral' se não existir)
         const statsRef = doc(db, "stats", "geral");
         await setDoc(statsRef, { visitas: increment(1) }, { merge: true });
         
@@ -379,7 +375,6 @@ window.aplicarCupom = async () => {
         if(cupomValido.validade) {
             const hoje = new Date();
             const validade = new Date(cupomValido.validade);
-            // Corrige fuso adicionando horas para garantir comparação correta do dia
             validade.setHours(23, 59, 59);
             
             if(hoje > validade) {

@@ -38,9 +38,9 @@ body {
 .login-box {
     background: var(--bg-card); padding: 40px; border-radius: 16px;
     box-shadow: var(--shadow); text-align: center; width: 100%; 
-    max-width: 500px; /* Aumentado para caber endereço */
-    max-height: 90vh; /* Limite de altura */
-    overflow-y: auto; /* Scroll se necessário */
+    max-width: 500px; 
+    max-height: 90vh; 
+    overflow-y: auto; 
     transition: background 0.3s;
     margin: auto;
 }
@@ -77,7 +77,7 @@ body {
     display: flex; gap: 10px; width: 100%; align-items: center;
 }
 .address-row input { flex: 1; min-width: 0; }
-.address-row .input-group { flex: 1; } /* Garante que divs internas cresçam */
+.address-row .input-group { flex: 1; } 
 
 .btn-cep {
     flex: 0 0 auto; width: auto; padding: 0 20px;

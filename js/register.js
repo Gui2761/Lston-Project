@@ -11,10 +11,10 @@ const notify = (msg, type) => {
 
 // Máscara de Telefone em Tempo Real
 window.mascaraTelRegistro = (el) => {
-    let v = el.value.replace(/\D/g, ""); // Remove tudo que não é dígito
-    v = v.substring(0, 11); // Limita a 11 números
+    let v = el.value.replace(/\D/g, ""); 
+    v = v.substring(0, 11);
 
-    // Aplica a formatação (XX) XXXXX-XXXX
+    
     if (v.length > 10) {
         v = v.replace(/^(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
     } else if (v.length > 5) {
@@ -105,7 +105,7 @@ document.getElementById('registerForm').addEventListener('submit', async functio
         await setDoc(doc(db, "users", user.uid), {
             nome: nome,
             email: email,
-            telefone: telLimpo, // Salva limpo (apenas números)
+            telefone: telLimpo, 
             cep: cep,
             endereco: endereco,
             numero: numero,
