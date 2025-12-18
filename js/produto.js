@@ -91,20 +91,15 @@ async function carregarProdutosFavoritos(listaEl) {
             </div>`;
     });
 
-    // --- CORREÇÃO: Limpeza de Fantasmas na Página de Produto ---
-    // Se o número de itens encontrados for menor do que os buscados, limpa os inválidos do lote
     if(idsEncontrados.length < idsParaBuscar.length) {
-        // Mantém apenas os que foram encontrados OU os que não foram buscados (paginação)
         const novosFavoritos = favoritos.filter(id => !idsParaBuscar.includes(id) || idsEncontrados.includes(id));
         favoritos = novosFavoritos;
         localStorage.setItem('lston_favoritos', JSON.stringify(favoritos));
-        // Atualiza contador
         const favCount = document.getElementById('fav-count');
         if(favCount) favCount.innerText = favoritos.length;
     }
 }
 
-// Função auxiliar para o modal de favoritos
 window.adicionarComQtdDireto = (id, qtd, img, nome, preco, estoque) => {
     const itemExistente = carrinho.find(p => p.id === id);
     if (itemExistente && itemExistente.qtd + qtd > estoque) { window.showToast("Estoque insuficiente!", "error"); return; }
@@ -125,7 +120,7 @@ async function carregarProduto() {
             const prod = docSnap.data(); prod.id = docSnap.id;
             renderizarLayoutNovo(prod);
             carregarReviews(produtoId);
-            carregarRelacionados(prod.categoria); // Carrega Venda Cruzada
+            carregarRelacionados(prod.categoria); 
         }
     } catch (e) { console.error(e); }
 }
@@ -167,6 +162,10 @@ function renderizarLayoutNovo(prod) {
     const btnDisabled = est === 0 ? 'disabled style="background:#ccc;"' : '';
     let priceHtml = `<div class="prod-price-big">${window.fmtMoney(prod.preco)}</div>`;
     
+    // Configuração do Link do WhatsApp
+    const textoZap = `Olá, tenho interesse no produto *${prod.nome}* que vi no site!`;
+    const linkZap = `https://wa.me/5511999999999?text=${encodeURIComponent(textoZap)}`; // Substitua pelo seu número
+
     container.innerHTML = `
         <div class="product-page-container">
             <h1 class="prod-title-big">${prod.nome}</h1>
@@ -175,10 +174,19 @@ function renderizarLayoutNovo(prod) {
                 <div class="details-col">
                     <div class="prod-desc-box"><h3>Descrição</h3><p>${prod.descricao || 'Sem descrição.'}</p></div>
                     <div>${priceHtml}</div>
-                    <p><strong>Estoque:</strong> ${est} un.</p>
+                    <p style="color:${est<5?'#e74c3c':'var(--text-muted)'}; font-weight:bold;">
+                        ${est < 5 && est > 0 ? `<i class="fas fa-exclamation-triangle"></i> Restam apenas ${est} unidades!` : `Estoque: ${est} un.`}
+                    </p>
                     <div class="detail-qty-selector"><button onclick="alterarQtdDetail(-1)">-</button><input type="text" id="detail-qty" value="1" readonly><button onclick="alterarQtdDetail(1)">+</button></div>
+                    
                     <button id="btn-add-cart" class="btn-buy-big" ${btnDisabled}>${est===0?'Esgotado':'Adicionar ao Carrinho'}</button>
-                    <button class="btn-share" onclick="navigator.clipboard.writeText(window.location.href);window.showToast('Link copiado!')">Compartilhar Link</button>
+                    
+                    <a href="${linkZap}" target="_blank" class="btn-whatsapp" style="text-decoration:none; margin-top:10px;">
+                        <i class="fab fa-whatsapp"></i> Comprar pelo WhatsApp
+                    </a>
+
+                    <button class="btn-share" onclick="navigator.clipboard.writeText(window.location.href);window.showToast('Link copiado!')" style="margin-top:10px;">Compartilhar Link</button>
+                    
                     <div class="shipping-calc"><label style="font-size:14px; font-weight:bold; color:var(--text-color)">Calcular Frete:</label><div class="shipping-input-group"><input type="text" id="calc-cep" placeholder="CEP" maxlength="9" oninput="mascaraCep(this)"><button onclick="calcularFrete()">OK</button></div><div id="frete-res" style="margin-top:10px; font-size:14px; color:var(--text-color);"></div></div>
                 </div>
             </div>
@@ -186,7 +194,7 @@ function renderizarLayoutNovo(prod) {
     if(est > 0) document.getElementById('btn-add-cart').addEventListener('click', () => adicionarComQtdPagina(prod, imagens[0]));
 }
 
-// --- FUNÇÕES DE CARRINHO (RESTAURADAS) ---
+// --- FUNÇÕES DE CARRINHO ---
 window.trocarImagem = function(url, elemento) { document.getElementById('main-img-display').src = url; document.querySelectorAll('.thumb-box').forEach(el => el.style.border = '2px solid #eee'); if(elemento) elemento.style.border = '2px solid #2c3e50'; }
 window.alterarQtdDetail = (delta) => { const input = document.getElementById('detail-qty'); let val = parseInt(input.value) + delta; if(val < 1) val = 1; input.value = val; }
 
@@ -216,7 +224,7 @@ function atualizarCarrinhoUI() {
     if(document.getElementById('cart-total')) document.getElementById('cart-total').innerHTML = window.fmtMoney(subtotal);
 }
 
-// Funções de Gestão do Modal de Carrinho (RESTAURADAS)
+// Funções de Gestão do Modal de Carrinho
 window.alterarQtdCarrinho = (index, delta) => {
     const item = carrinho[index];
     const estoque = parseInt(item.estoque) || 0;
@@ -233,13 +241,13 @@ window.toggleCarrinho = () => {
     atualizarCarrinhoUI(); 
 }
 
-// Checkout Simplificado na Página do Produto (Redireciona para Home)
+// Checkout Simplificado
 window.irParaCheckout = () => { window.location.href = "index.html"; } 
-window.voltarParaCarrinho = () => { document.getElementById('carrinho-modal').style.display='none'; } // Fecha se tentar voltar
+window.voltarParaCarrinho = () => { document.getElementById('carrinho-modal').style.display='none'; } 
 window.aplicarCupom = async () => { window.showToast("Use os cupons na página inicial.", "info"); }
 window.confirmarPedido = async () => { window.location.href = "index.html"; }
 
-// Frete da Página (Widget)
+// Frete da Página
 window.calcularFrete = async () => { 
     const cep = document.getElementById('calc-cep').value.replace(/\D/g,''); 
     const res = document.getElementById('frete-res'); 

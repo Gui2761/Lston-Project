@@ -1,4 +1,3 @@
-/* --- js/admin.js (ATUALIZADO: PAGINAÇÃO, CATEGORIAS, IMPRESSÃO) --- */
 import { db, auth, storage } from "./firebaseConfig.js";
 import { collection, addDoc, getDocs, getDoc, deleteDoc, updateDoc, doc, query, orderBy } from "firebase/firestore";
 import { onAuthStateChanged, signOut } from "firebase/auth";
@@ -10,28 +9,27 @@ const pedidosCollection = collection(db, "pedidos");
 const bannersCollection = collection(db, "banners");
 const cuponsCollection = collection(db, "cupons");
 const categoriasCollection = collection(db, "categorias");
+const usersCollection = collection(db, "users");
 
 let chartCat = null;
 let chartFat = null;
 let todosPedidosCache = [];
-let pedidosFiltrados = []; // Para paginação
+let pedidosFiltrados = []; 
 let todosProdutosCache = []; 
-let todasCategoriasCache = []; // Nova Cache
+let todasCategoriasCache = []; 
 let filesToUpload = []; 
 
-// Configuração Paginação
+// Paginação
 let paginaAtual = 1;
 const itensPorPagina = 20;
 
-// --- 1. TEMA E INICIALIZAÇÃO ---
+// --- 1. INICIALIZAÇÃO ---
 try {
     const savedTheme = localStorage.getItem('lston_theme') || 'light';
     document.body.setAttribute('data-theme', savedTheme);
     const themeToggle = document.getElementById('theme-toggle-admin');
-    if(themeToggle) {
-        themeToggle.className = savedTheme === 'dark' ? 'fas fa-sun theme-toggle-admin' : 'fas fa-moon theme-toggle-admin';
-    }
-} catch(e) { console.warn(e); }
+    if(themeToggle) themeToggle.className = savedTheme === 'dark' ? 'fas fa-sun theme-toggle-admin' : 'fas fa-moon theme-toggle-admin';
+} catch(e) {}
 
 window.toggleThemeAdmin = () => {
     const body = document.body;
@@ -47,18 +45,19 @@ onAuthStateChanged(auth, async (user) => {
     if(!user) { 
         window.location.href="login.html"; 
     } else if (user.email !== "admin@lston.com") { 
-        alert("Acesso restrito a administradores."); 
+        alert("Acesso restrito."); 
         await signOut(auth);
         window.location.href = "index.html"; 
     } else { 
-        console.log("Admin logado. Iniciando módulos...");
+        console.log("Admin logado.");
         initDragAndDrop();
         
-        await renderizarCategorias(); // Carrega categorias primeiro
+        await renderizarCategorias(); 
         await renderizarDashboard(); 
         renderizarTabela();          
         renderizarBanners();
         renderizarCupons();
+        renderizarClientes(); // Carrega clientes
         
         ativarListenersFiltros();
     } 
@@ -69,17 +68,23 @@ async function renderizarDashboard() {
     try {
         const filtroData = document.getElementById('filtro-data-dashboard')?.value || 'total';
         
+        // Cache de Pedidos
         if(todosPedidosCache.length === 0) {
-            // Busca pedidos ordenados por data (mais recente primeiro se houver campo dataISO, senão ordena em memória)
             const q = await getDocs(pedidosCollection);
             todosPedidosCache = [];
-            q.forEach(d => {
-                const p = d.data(); p.id = d.id;
-                todosPedidosCache.push(p);
-            });
-            // Ordenação local por data (mais novo primeiro)
+            q.forEach(d => { const p = d.data(); p.id = d.id; todosPedidosCache.push(p); });
             todosPedidosCache.sort((a,b) => new Date(b.data) - new Date(a.data));
         }
+
+        // Busca Visitas (Stats)
+        try {
+            const statsSnap = await getDoc(doc(db, "stats", "geral"));
+            if(statsSnap.exists()) {
+                const totalVisitas = statsSnap.data().visitas || 0;
+                const kpiVisitas = document.getElementById('kpi-visitas');
+                if(kpiVisitas) kpiVisitas.innerText = totalVisitas;
+            }
+        } catch(e) { console.warn("Erro ao ler visitas"); }
 
         let cats = {}, dias = {}, totalFat = 0, totalVendas = 0;
         const hoje = new Date().toLocaleDateString('pt-BR');
@@ -103,10 +108,8 @@ async function renderizarDashboard() {
             dias[dStr] = (dias[dStr] || 0) + (parseFloat(p.total) || 0);
         });
 
-        const elFat = document.getElementById('kpi-faturamento');
-        const elVend = document.getElementById('kpi-vendas');
-        if(elFat) elFat.innerText = fmtMoney(totalFat);
-        if(elVend) elVend.innerText = totalVendas;
+        document.getElementById('kpi-faturamento').innerText = fmtMoney(totalFat);
+        document.getElementById('kpi-vendas').innerText = totalVendas;
 
         if(document.getElementById('total-estoque-count')) {
             const totalEst = todosProdutosCache.reduce((sum, p) => sum + (parseInt(p.estoque)||0), 0);
@@ -114,13 +117,13 @@ async function renderizarDashboard() {
         }
 
         desenharGraficos(cats, dias);
-        filtrarPedidos(); // Inicia tabela
+        filtrarPedidos(); 
 
     } catch (error) { console.error("Erro Dashboard:", error); }
 }
 window.renderizarDashboard = renderizarDashboard;
 
-// --- 4. PEDIDOS (COM PAGINAÇÃO E BUSCA) ---
+// --- 4. PEDIDOS ---
 function ativarListenersFiltros() {
     const filtroStatusEl = document.getElementById('filtro-status');
     if(filtroStatusEl) {
@@ -128,24 +131,15 @@ function ativarListenersFiltros() {
         filtroStatusEl.addEventListener('change', filtrarPedidos);
     }
 }
-
-function normalizarTexto(texto) {
-    if (!texto) return "";
-    return texto.toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-}
+function normalizarTexto(texto) { if (!texto) return ""; return texto.toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""); }
 
 window.filtrarPedidos = () => {
-    const filtroStatusEl = document.getElementById('filtro-status');
-    const buscaEl = document.getElementById('busca-pedido');
-    const filtroDataEl = document.getElementById('filtro-data-dashboard'); 
-    
-    const filtroStatus = filtroStatusEl ? filtroStatusEl.value : 'Todos';
-    const filtroData = filtroDataEl ? filtroDataEl.value : 'total';
-    const termoOriginal = buscaEl ? buscaEl.value.trim() : '';
+    const filtroStatus = document.getElementById('filtro-status') ? document.getElementById('filtro-status').value : 'Todos';
+    const filtroData = document.getElementById('filtro-data-dashboard') ? document.getElementById('filtro-data-dashboard').value : 'total';
+    const termoOriginal = document.getElementById('busca-pedido') ? document.getElementById('busca-pedido').value.trim() : '';
     const termoNormalizado = normalizarTexto(termoOriginal);
     const hoje = new Date().toLocaleDateString('pt-BR');
 
-    // 1. Aplica filtros
     pedidosFiltrados = todosPedidosCache.filter(p => {
         if (filtroData === 'hoje') {
             let dataPedido = '-';
@@ -162,7 +156,6 @@ window.filtrarPedidos = () => {
         return matchStatus && (matchId || matchTexto);
     });
 
-    // 2. Reseta para página 1
     paginaAtual = 1;
     renderizarTabelaPedidos();
 }
@@ -170,35 +163,24 @@ window.filtrarPedidos = () => {
 window.mudarPagina = (delta) => {
     const totalPaginas = Math.ceil(pedidosFiltrados.length / itensPorPagina);
     const novaPagina = paginaAtual + delta;
-    if(novaPagina >= 1 && novaPagina <= totalPaginas) {
-        paginaAtual = novaPagina;
-        renderizarTabelaPedidos();
-    }
+    if(novaPagina >= 1 && novaPagina <= totalPaginas) { paginaAtual = novaPagina; renderizarTabelaPedidos(); }
 }
 
 function renderizarTabelaPedidos() {
     const tbody = document.getElementById('tabela-pedidos');
-    const btnPrev = document.getElementById('btn-prev-page');
-    const btnNext = document.getElementById('btn-next-page');
     const infoPage = document.getElementById('page-info');
-    
     if(!tbody) return;
 
     if(pedidosFiltrados.length === 0) {
         tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:30px; color:var(--text-light);">Nenhum pedido encontrado.</td></tr>`;
         if(infoPage) infoPage.innerText = "Pág 0 de 0";
-        if(btnPrev) btnPrev.disabled = true;
-        if(btnNext) btnNext.disabled = true;
         return;
     }
 
-    // Lógica de Slice para Paginação
     const inicio = (paginaAtual - 1) * itensPorPagina;
-    const fim = inicio + itensPorPagina;
-    const itensPagina = pedidosFiltrados.slice(inicio, fim);
+    const itensPagina = pedidosFiltrados.slice(inicio, inicio + itensPorPagina);
     const totalPaginas = Math.ceil(pedidosFiltrados.length / itensPorPagina);
 
-    // Renderiza
     tbody.innerHTML = itensPagina.map(p => {
         const idCurto = p.id ? p.id.slice(0, 8).toUpperCase() : '???';
         const data = p.data ? new Date(p.data).toLocaleDateString('pt-BR') : '-';
@@ -211,40 +193,26 @@ function renderizarTabelaPedidos() {
 
         return `
         <tr>
-            <td>
-                <span title="${p.id}" style="cursor:help"><strong>#${idCurto}</strong></span>
-                <br><small style="color:#888">${data}</small>
-            </td>
-            <td>
-                <div style="font-weight:600;">${p.cliente || 'Desconhecido'}</div>
-                <div style="font-size:11px; color:#888;">${p.userEmail || ''}</div>
-            </td>
+            <td><span title="${p.id}" style="cursor:help"><strong>#${idCurto}</strong></span><br><small style="color:#888">${data}</small></td>
+            <td><div style="font-weight:600;">${p.cliente || 'Desconhecido'}</div><div style="font-size:11px; color:#888;">${p.userEmail || ''}</div></td>
             <td style="font-weight:bold;">${fmtMoney(p.total || 0)}</td>
             <td>
-                <select onchange="window.updateStatus('${p.id}', this.value)" 
-                        style="padding:5px 10px; border-radius:15px; border:1px solid ${corStatus}; color:${corStatus}; font-weight:600; cursor:pointer; background:transparent;">
+                <select onchange="window.updateStatus('${p.id}', this.value)" style="padding:5px 10px; border-radius:15px; border:1px solid ${corStatus}; color:${corStatus}; font-weight:600; cursor:pointer; background:transparent;">
                     <option value="Recebido" ${statusAtual==='Recebido'?'selected':''}>Recebido</option>
                     <option value="Enviado" ${statusAtual==='Enviado'?'selected':''}>Enviado</option>
                     <option value="Entregue" ${statusAtual==='Entregue'?'selected':''}>Entregue</option>
                     <option value="Cancelado" ${statusAtual==='Cancelado'?'selected':''}>Cancelado</option>
                 </select>
             </td>
-            <td>
-                <button onclick="window.verDetalhes('${p.id}')" title="Ver Detalhes"
-                        style="background:var(--bg-body); color:var(--text-main); border:1px solid var(--border); width:35px; height:35px; border-radius:50%; cursor:pointer; transition:0.2s;">
-                    <i class="fas fa-eye"></i>
-                </button>
-            </td>
+            <td><button onclick="window.verDetalhes('${p.id}')" title="Ver Detalhes" style="background:var(--bg-body); color:var(--text-main); border:1px solid var(--border); width:35px; height:35px; border-radius:50%; cursor:pointer;"><i class="fas fa-eye"></i></button></td>
         </tr>`;
     }).join('');
 
-    // Atualiza controles
     if(infoPage) infoPage.innerText = `Pág ${paginaAtual} de ${totalPaginas}`;
-    if(btnPrev) btnPrev.disabled = paginaAtual === 1;
-    if(btnNext) btnNext.disabled = paginaAtual === totalPaginas;
+    document.getElementById('btn-prev-page').disabled = paginaAtual === 1;
+    document.getElementById('btn-next-page').disabled = paginaAtual === totalPaginas;
 }
 
-// Detalhes e IMPRESSÃO
 window.verDetalhes = (id) => {
     const p = todosPedidosCache.find(x => x.id === id);
     if(!p) return;
@@ -254,9 +222,7 @@ window.verDetalhes = (id) => {
         conteudo.innerHTML = `
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
                 <h4 style="margin:0;">Info do Pedido</h4>
-                <button onclick="window.imprimirPedido('${p.id}')" style="background:#2c3e50; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:13px;">
-                    <i class="fas fa-print"></i> Imprimir Recibo
-                </button>
+                <button onclick="window.imprimirPedido('${p.id}')" style="background:#2c3e50; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:13px;"><i class="fas fa-print"></i> Imprimir</button>
             </div>
             <p><strong>Cliente:</strong> ${p.cliente}</p>
             <p><strong>Tel:</strong> ${p.telefone}</p>
@@ -271,53 +237,11 @@ window.verDetalhes = (id) => {
     }
 }
 
-// FUNÇÃO DE IMPRESSÃO
 window.imprimirPedido = (id) => {
     const p = todosPedidosCache.find(x => x.id === id);
     if(!p) return;
-
-    const itensHtml = (p.itens || []).map(i => 
-        `<tr>
-            <td style="padding:5px; border-bottom:1px solid #eee;">${i.nome}</td>
-            <td style="padding:5px; border-bottom:1px solid #eee; text-align:center;">${i.qtd}</td>
-            <td style="padding:5px; border-bottom:1px solid #eee; text-align:right;">${fmtMoney(i.preco)}</td>
-        </tr>`
-    ).join('');
-
-    const conteudoImpressao = `
-        <html>
-        <head>
-            <title>Pedido #${id.slice(0,8)}</title>
-            <style>
-                body { font-family: monospace; padding: 20px; max-width: 80mm; margin: 0 auto; }
-                h2 { text-align: center; border-bottom: 2px dashed #000; padding-bottom: 10px; margin: 0 0 10px 0; }
-                table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; }
-                .info { margin-bottom: 10px; font-size: 12px; line-height: 1.4; }
-                .total { text-align: right; font-size: 16px; font-weight: bold; margin-top: 15px; border-top: 2px dashed #000; padding-top: 10px; }
-            </style>
-        </head>
-        <body>
-            <h2>L&stON - Pedido</h2>
-            <div class="info">
-                <strong>Data:</strong> ${new Date(p.data).toLocaleDateString()}<br>
-                <strong>Cliente:</strong> ${p.cliente}<br>
-                <strong>Tel:</strong> ${p.telefone}<br>
-                <strong>Endereço:</strong><br>
-                ${p.endereco}, ${p.numero || ''}<br>
-                ${p.bairro || ''} - ${p.cidade || ''}<br>
-                CEP: ${p.cep || ''}
-            </div>
-            <table>
-                <thead><tr style="text-align:left;"><th>Item</th><th style="text-align:center;">Qtd</th><th style="text-align:right;">$</th></tr></thead>
-                <tbody>${itensHtml}</tbody>
-            </table>
-            <div class="total">Total: ${fmtMoney(p.total)}</div>
-            <p style="text-align:center; font-size:10px; margin-top:20px;">Obrigado pela preferência!</p>
-            <script>window.print(); window.onafterprint = function(){ window.close(); }</script>
-        </body>
-        </html>
-    `;
-
+    const itensHtml = (p.itens || []).map(i => `<tr><td style="padding:5px; border-bottom:1px solid #eee;">${i.nome}</td><td style="padding:5px; border-bottom:1px solid #eee; text-align:center;">${i.qtd}</td><td style="padding:5px; border-bottom:1px solid #eee; text-align:right;">${fmtMoney(i.preco)}</td></tr>`).join('');
+    const conteudoImpressao = `<html><head><title>Pedido #${id.slice(0,8)}</title><style>body { font-family: monospace; padding: 20px; max-width: 80mm; margin: 0 auto; } h2 { text-align: center; border-bottom: 2px dashed #000; padding-bottom: 10px; margin: 0 0 10px 0; } table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; } .info { margin-bottom: 10px; font-size: 12px; line-height: 1.4; } .total { text-align: right; font-size: 16px; font-weight: bold; margin-top: 15px; border-top: 2px dashed #000; padding-top: 10px; }</style></head><body><h2>L&stON - Pedido</h2><div class="info"><strong>Data:</strong> ${new Date(p.data).toLocaleDateString()}<br><strong>Cliente:</strong> ${p.cliente}<br><strong>Tel:</strong> ${p.telefone}<br><strong>Endereço:</strong><br>${p.endereco}, ${p.numero || ''}<br>${p.bairro || ''} - ${p.cidade || ''}<br>CEP: ${p.cep || ''}</div><table><thead><tr style="text-align:left;"><th>Item</th><th style="text-align:center;">Qtd</th><th style="text-align:right;">$</th></tr></thead><tbody>${itensHtml}</tbody></table><div class="total">Total: ${fmtMoney(p.total)}</div><p style="text-align:center; font-size:10px; margin-top:20px;">Obrigado pela preferência!</p><script>window.print(); window.onafterprint = function(){ window.close(); }</script></body></html>`;
     const janela = window.open('', '', 'height=600,width=400');
     janela.document.write(conteudoImpressao);
     janela.document.close();
@@ -341,51 +265,67 @@ window.exportarPedidos = () => {
     a.click();
 }
 
-// --- 5. GESTÃO DE CATEGORIAS (NOVO) ---
+// --- 5. CLIENTES ---
+async function renderizarClientes() {
+    const tbody = document.getElementById('tabela-clientes');
+    const countEl = document.getElementById('total-clientes-count');
+    if(!tbody) return;
+
+    try {
+        const q = await getDocs(usersCollection);
+        let html = '';
+        let total = 0;
+
+        q.forEach(doc => {
+            const u = doc.data();
+            total++;
+            const dataCad = u.dataCadastro ? new Date(u.dataCadastro).toLocaleDateString('pt-BR') : '-';
+            let zapBtn = '';
+            if(u.telefone) {
+                const num = u.telefone.replace(/\D/g, '');
+                if(num.length >= 10) {
+                    zapBtn = `<a href="https://wa.me/55${num}" target="_blank" style="color:#25D366; margin-left:5px;"><i class="fab fa-whatsapp"></i></a>`;
+                }
+            }
+
+            html += `<tr><td><strong>${u.nome || 'Sem Nome'}</strong><br><small style="color:#888">${u.email}</small></td><td>${u.telefone || '-'} ${zapBtn}</td><td>${u.cidade || '-'} / ${u.cep || '-'}</td><td>${dataCad}</td></tr>`;
+        });
+
+        tbody.innerHTML = total > 0 ? html : '<tr><td colspan="4" style="text-align:center; padding:20px;">Nenhum cliente cadastrado.</td></tr>';
+        if(countEl) countEl.innerText = total;
+    } catch (e) { console.error("Erro Clientes:", e); }
+}
+
+// --- 6. CATEGORIAS, PRODUTOS E OUTROS ---
 async function renderizarCategorias() {
     try {
         const tbody = document.getElementById('tabela-categorias');
-        const q = await getDocs(query(categoriasCollection, orderBy("nome"))); // Requer índice ou ordenação client-side
-        
+        const q = await getDocs(query(categoriasCollection, orderBy("nome")));
         todasCategoriasCache = [];
         q.forEach(d => { todasCategoriasCache.push({ id:d.id, ...d.data() }); });
         
-        // Se houver erro de índice no Firestore, ordene aqui:
-        todasCategoriasCache.sort((a,b) => a.nome.localeCompare(b.nome));
-
-        // Preenche Tabela
         if(tbody) {
             tbody.innerHTML = '';
             todasCategoriasCache.forEach(c => {
                 tbody.innerHTML += `<tr><td>${c.nome}</td><td><i class="fas fa-trash" style="color:red; cursor:pointer;" onclick="window.delCategoria('${c.id}')"></i></td></tr>`;
             });
         }
-        
-        // Atualiza Select do Modal de Produto
         atualizarSelectCategorias();
-
-    } catch(e) { console.warn("Erro Categorias:", e); }
+    } catch(e) { console.warn(e); }
 }
 
 function atualizarSelectCategorias() {
     const select = document.getElementById('prod-cat');
     if(!select) return;
-    
-    // Mantém opção "Geral"
     select.innerHTML = '<option value="Geral">Geral</option>';
-    
-    todasCategoriasCache.forEach(c => {
-        select.innerHTML += `<option value="${c.nome}">${c.nome}</option>`;
-    });
+    todasCategoriasCache.forEach(c => { select.innerHTML += `<option value="${c.nome}">${c.nome}</option>`; });
 }
 
-// Listener para Botão de Salvar Categoria
 const btnSaveCat = document.getElementById('btn-save-cat');
 if(btnSaveCat) {
     btnSaveCat.addEventListener('click', async () => {
         const nome = document.getElementById('nova-cat-nome').value.trim();
         if(!nome) return showToast("Digite um nome!", "error");
-        
         try {
             await addDoc(categoriasCollection, { nome: nome });
             document.getElementById('modalCategoria').style.display='none';
@@ -395,27 +335,15 @@ if(btnSaveCat) {
         } catch(e) { showToast("Erro ao criar.", "error"); }
     });
 }
+window.delCategoria = async (id) => { if(confirm("Excluir?")) { await deleteDoc(doc(db, "categorias", id)); renderizarCategorias(); } }
 
-window.delCategoria = async (id) => {
-    if(confirm("Excluir categoria?")) {
-        try { await deleteDoc(doc(db, "categorias", id)); renderizarCategorias(); showToast("Excluída!"); } 
-        catch(e) { showToast("Erro ao excluir.", "error"); }
-    }
-}
-
-// --- 6. PRODUTOS ---
 window.abrirModalProduto = () => { 
     document.getElementById('prod-id').value=""; 
     document.getElementById('modal-titulo').innerText="Novo Produto";
     filesToUpload = []; 
     const prev = document.getElementById('preview-container'); if(prev) prev.innerHTML = "";
-    ['prod-nome','prod-preco','prod-preco-antigo','prod-estoque','prod-desc'].forEach(id => { 
-        const el = document.getElementById(id); if(el) el.value = ""; 
-    });
-    
-    // Atualiza select para garantir opções atuais
+    ['prod-nome','prod-preco','prod-preco-antigo','prod-estoque','prod-desc'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ""; });
     atualizarSelectCategorias();
-    
     document.getElementById('modalProduto').style.display='flex'; 
 }
 window.fecharModal = () => document.getElementById('modalProduto').style.display='none';
@@ -449,12 +377,8 @@ window.editarProduto = async (id) => {
             document.getElementById('prod-preco').value = p.preco;
             document.getElementById('prod-preco-antigo').value = p.precoOriginal||"";
             document.getElementById('prod-estoque').value = p.estoque;
-            
-            // Popula categoria e verifica se ela ainda existe
             atualizarSelectCategorias();
-            const selCat = document.getElementById('prod-cat');
-            selCat.value = p.categoria || "Geral";
-            
+            document.getElementById('prod-cat').value = p.categoria || "Geral";
             document.getElementById('prod-desc').value = p.descricao||"";
             const prev = document.getElementById('preview-container'); prev.innerHTML = "";
             if(p.imagens) p.imagens.forEach(url => prev.innerHTML += `<div class="preview-card"><img src="${url}"><div class="remove-btn" style="background:#555;">x</div></div>`);
@@ -462,14 +386,8 @@ window.editarProduto = async (id) => {
         }
     } catch(e){} finally { toggleLoading(false); }
 }
+window.deletarProduto = async (id) => { if(confirm("Excluir?")) { await deleteDoc(doc(db,"produtos",id)); renderizarTabela(); } }
 
-window.deletarProduto = async (id) => {
-    if(confirm("Excluir produto?")) {
-        try { await deleteDoc(doc(db,"produtos",id)); renderizarTabela(); showToast("Excluído!"); } catch(e){}
-    }
-}
-
-// SALVAR PRODUTO
 const btnSave = document.getElementById('btn-save-prod');
 if(btnSave) {
     btnSave.addEventListener('click', async () => {
@@ -491,25 +409,15 @@ if(btnSave) {
                 const imgsAtuais = snap.exists() ? (snap.data().imagens||[]) : [];
                 if(urls.length>0) dados.imagens = urls; else dados.imagens = imgsAtuais;
                 await updateDoc(doc(db,"produtos",id), dados);
-            } else {
-                dados.imagens = urls; dados.dataCriacao = new Date();
-                await addDoc(produtosCollection, dados);
-            }
+            } else { dados.imagens = urls; dados.dataCriacao = new Date(); await addDoc(produtosCollection, dados); }
             document.getElementById('modalProduto').style.display='none';
             renderizarTabela(); renderizarDashboard(); showToast("Salvo!");
         } catch(e){ console.error(e); showToast("Erro ao salvar", "error"); } finally { toggleLoading(false); }
     });
 }
 
-// --- 7. BANNERS & CUPONS & HELPERS ---
-function showToast(msg, type='success') { 
-    if(typeof Toastify !== 'undefined') Toastify({ text: msg, duration: 3000, style: { background: type==='error'?"#c62828":"#2c3e50" } }).showToast();
-    else alert(msg);
-}
-function toggleLoading(show) { 
-    const el = document.getElementById('loading-overlay'); 
-    if(el) el.style.display = show ? 'flex' : 'none'; 
-}
+function showToast(msg, type='success') { if(typeof Toastify !== 'undefined') Toastify({ text: msg, duration: 3000, style: { background: type==='error'?"#c62828":"#2c3e50" } }).showToast(); else alert(msg); }
+function toggleLoading(show) { const el = document.getElementById('loading-overlay'); if(el) el.style.display = show ? 'flex' : 'none'; }
 function fmtMoney(val) { return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val); }
 
 function initDragAndDrop() {
@@ -558,8 +466,7 @@ function desenharGraficos(cats, dias) {
     } catch(e) {}
 }
 
-// NAV 
-const sections = ['dashboard','produtos','pedidos','categorias','banners','cupons']; // Add 'categorias'
+const sections = ['dashboard','produtos','pedidos','categorias','clientes','banners','cupons']; 
 sections.forEach(s => {
     const l = document.getElementById(`link-${s}`);
     if(l) l.addEventListener('click', (e) => {
@@ -575,7 +482,6 @@ sections.forEach(s => {
 const btnLogout = document.getElementById('btn-logout');
 if(btnLogout) btnLogout.addEventListener('click', async (e)=>{ e.preventDefault(); await signOut(auth); window.location.href="login.html"; });
 
-// BANNERS
 async function renderizarBanners() {
     const tb = document.getElementById('tabela-banners');
     if(!tb) return;
@@ -596,7 +502,6 @@ if(btnBan) btnBan.addEventListener('click', async () => {
 });
 window.delBanner = async(id)=>{ if(confirm("Apagar?")) { await deleteDoc(doc(db,"banners",id)); renderizarBanners(); }};
 
-// CUPONS
 async function renderizarCupons() {
     const tb = document.getElementById('tabela-cupons');
     if(!tb) return;

@@ -23,12 +23,15 @@ function fmtMoney(val) { return new Intl.NumberFormat('pt-BR', { style: 'currenc
 const pedidosList = document.getElementById('lista-meus-pedidos');
 let currentUserId = null;
 
+// --- AUTH E INICIALIZAÇÃO ---
 onAuthStateChanged(auth, async (user) => {
     if (!user) { window.location.href = "login.html"; return; }
     currentUserId = user.uid;
-    document.getElementById('user-email-display').innerText = user.displayName || user.email;
+    if(document.getElementById('user-email-display')) {
+        document.getElementById('user-email-display').innerText = user.displayName || user.email;
+    }
     
-    // Carrega dados pessoais e pedidos
+    // Carrega dados e pedidos
     carregarDadosPerfil(user.uid);
     carregarPedidos(user.email);
 });
@@ -64,7 +67,6 @@ window.salvarDadosPerfil = async () => {
     };
 
     try {
-        // Usa setDoc com merge para não apagar outros campos se existirem
         await setDoc(doc(db, "users", currentUserId), dados, { merge: true });
         showToast("Dados atualizados com sucesso!");
     } catch (e) {
@@ -73,7 +75,7 @@ window.salvarDadosPerfil = async () => {
     }
 }
 
-// --- PEDIDOS (EXPANSÍVEL) ---
+// --- PEDIDOS (COM TIMELINE VISUAL) ---
 async function carregarPedidos(email) {
     try {
         const q = query(collection(db, "pedidos"), where("userEmail", "==", email));
@@ -81,15 +83,45 @@ async function carregarPedidos(email) {
 
         pedidosList.innerHTML = '';
         if (querySnapshot.empty) { 
-            pedidosList.innerHTML = '<p style="color:var(--text-muted); text-align:center;">Você ainda não fez nenhum pedido.</p>'; 
+            pedidosList.innerHTML = '<div style="text-align:center; padding:40px; color:var(--text-muted);"><i class="fas fa-shopping-bag" style="font-size:40px; margin-bottom:10px; opacity:0.5;"></i><p>Você ainda não fez nenhum pedido.</p></div>'; 
             return; 
         }
 
-        querySnapshot.forEach((doc) => {
-            const p = doc.data();
-            const data = new Date(p.data).toLocaleDateString('pt-BR');
-            const idCurto = doc.id.slice(0, 8).toUpperCase();
+        const pedidos = [];
+        querySnapshot.forEach(doc => pedidos.push({id: doc.id, ...doc.data()}));
+        
+        // Ordena do mais recente para o mais antigo
+        pedidos.sort((a,b) => new Date(b.data) - new Date(a.data));
+
+        pedidos.forEach((p) => {
+            const data = p.data ? new Date(p.data).toLocaleDateString('pt-BR') : '-';
+            const idCurto = p.id.slice(0, 8).toUpperCase();
             
+            // --- Lógica da Timeline ---
+            const statusSteps = ['Recebido', 'Enviado', 'Entregue'];
+            const statusAtual = p.status || 'Recebido';
+            
+            let stepIndex = statusSteps.indexOf(statusAtual);
+            if(statusAtual === 'Cancelado') stepIndex = -1;
+
+            let timelineHtml = '';
+            if(stepIndex !== -1) {
+                timelineHtml = `<div class="order-timeline">`;
+                statusSteps.forEach((step, index) => {
+                    const active = index <= stepIndex ? 'active' : '';
+                    timelineHtml += `
+                        <div class="timeline-step ${active}">
+                            <div class="circle"><i class="fas fa-check"></i></div>
+                            <div class="label">${step}</div>
+                        </div>
+                        ${index < statusSteps.length - 1 ? `<div class="line ${index < stepIndex ? 'active' : ''}"></div>` : ''}
+                    `;
+                });
+                timelineHtml += `</div>`;
+            } else {
+                timelineHtml = `<div style="background:#ffebee; color:#c62828; padding:10px; border-radius:6px; text-align:center; margin-top:10px; font-weight:bold;"><i class="fas fa-times-circle"></i> Pedido Cancelado</div>`;
+            }
+
             let itensHtml = '';
             if(p.itens) {
                 p.itens.forEach(item => {
@@ -106,28 +138,38 @@ async function carregarPedidos(email) {
 
             const card = document.createElement('div');
             card.className = "order-card"; 
-            // Adiciona evento de clique para o acordeão
-            card.onclick = function() { this.classList.toggle('active'); };
+            card.onclick = function(e) { 
+                if(e.target.closest('.order-details')) return;
+                this.classList.toggle('active'); 
+            };
             
             card.innerHTML = `
                 <div class="order-header">
                     <div>
-                        <span style="font-weight:bold; font-size:14px;">Pedido #${idCurto}</span>
-                        <br>
-                        <span style="font-size:12px; color:var(--text-muted);">${data}</span>
-                        <br>
-                        <span class="status-badge status-${(p.status||'recebido').toLowerCase()}">${p.status||'Recebido'}</span>
+                        <span style="font-weight:bold; font-size:16px; color:var(--accent-color);">#${idCurto}</span>
+                        <div style="font-size:12px; color:var(--text-muted); margin-top:4px;"><i class="far fa-calendar-alt"></i> ${data}</div>
                     </div>
-                    <div style="text-align:right; padding-right: 25px;">
+                    <div style="text-align:right;">
                         <div style="font-weight:bold; color:var(--text-color); font-size:16px;">${fmtMoney(p.total)}</div>
-                        <div style="font-size:11px; color:var(--text-muted);">${p.itens ? p.itens.length : 0} itens</div>
+                        <span class="status-badge status-${(statusAtual).toLowerCase()}">${statusAtual}</span>
                     </div>
                 </div>
                 
                 <div class="order-details">
-                    <p style="font-size:13px; margin-bottom:10px;"><strong>Entrega em:</strong> ${p.endereco}, ${p.numero||''} - ${p.bairro||''}</p>
+                    ${timelineHtml}
+                    
+                    <div style="background:var(--bg-secondary); padding:15px; border-radius:8px; margin: 15px 0;">
+                        <p style="font-size:13px; margin-bottom:5px; color:var(--text-muted);">Endereço de Entrega:</p>
+                        <p style="font-weight:600; font-size:14px;">${p.endereco}, ${p.numero||''} - ${p.bairro||''}</p>
+                        <p style="font-size:13px;">${p.cidade} - ${p.cep}</p>
+                    </div>
+
                     ${itensHtml}
-                    <div class="order-total">Total: ${fmtMoney(p.total)}</div>
+                    
+                    <div class="order-total">
+                        <span>Frete: ${fmtMoney(p.frete||0)}</span>
+                        <span style="font-size:18px; margin-left:15px;">Total: ${fmtMoney(p.total)}</span>
+                    </div>
                 </div>
             `;
             pedidosList.appendChild(card);
@@ -135,6 +177,15 @@ async function carregarPedidos(email) {
     } catch (error) { console.error(error); }
 }
 
-document.getElementById('btn-logout-client').addEventListener('click', async () => {
-    await signOut(auth); window.location.href = "login.html";
-});
+// --- BOTÃO SAIR (Restaurado) ---
+const btnLogout = document.getElementById('btn-logout-client');
+if(btnLogout) {
+    btnLogout.addEventListener('click', async () => {
+        try {
+            await signOut(auth);
+            window.location.href = "login.html";
+        } catch(e) {
+            console.error("Erro ao sair:", e);
+        }
+    });
+}

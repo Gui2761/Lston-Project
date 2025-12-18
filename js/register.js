@@ -7,7 +7,28 @@ const notify = (msg, type) => {
     else alert(msg);
 };
 
-// Função global para o botão "Buscar" no HTML
+// --- MÁSCARAS E HELPERS ---
+
+// Máscara de Telefone em Tempo Real
+window.mascaraTelRegistro = (el) => {
+    let v = el.value.replace(/\D/g, ""); // Remove tudo que não é dígito
+    v = v.substring(0, 11); // Limita a 11 números
+
+    // Aplica a formatação (XX) XXXXX-XXXX
+    if (v.length > 10) {
+        v = v.replace(/^(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
+    } else if (v.length > 5) {
+        v = v.replace(/^(\d{2})(\d{4})(\d{0,4})/, "($1) $2-$3");
+    } else if (v.length > 2) {
+        v = v.replace(/^(\d{2})(\d{0,5})/, "($1) $2");
+    } else {
+        v = v.replace(/^(\d*)/, "($1");
+    }
+    
+    el.value = v;
+};
+
+// Busca CEP
 window.buscarCepReg = async () => {
     const cepInput = document.getElementById('reg-cep');
     if(!cepInput) return;
@@ -40,14 +61,14 @@ window.buscarCepReg = async () => {
     }
 }
 
+// --- LOGICA DE REGISTRO ---
 document.getElementById('registerForm').addEventListener('submit', async function(e) {
     e.preventDefault();
-    const nome = document.getElementById('reg-nome').value;
-    const email = document.getElementById('reg-email').value;
+    
+    const nome = document.getElementById('reg-nome').value.trim();
+    const email = document.getElementById('reg-email').value.trim();
     const pass = document.getElementById('reg-password').value;
     const confirm = document.getElementById('reg-confirm').value;
-    
-    // Novos campos
     const telefone = document.getElementById('reg-tel').value;
     const cep = document.getElementById('reg-cep').value;
     const endereco = document.getElementById('reg-endereco').value;
@@ -57,25 +78,34 @@ document.getElementById('registerForm').addEventListener('submit', async functio
 
     const btn = this.querySelector('button[type="submit"]');
 
+    // Validações
     if(pass !== confirm) return notify("As senhas não coincidem!", "error");
     if(pass.length < 6) return notify("A senha deve ter pelo menos 6 caracteres.", "error");
+
+    // Validação Estrita de Telefone (11 dígitos)
+    const telLimpo = telefone.replace(/\D/g, ''); 
+    if (telLimpo.length !== 11) {
+        return notify("Telefone inválido! Digite DDD + 9 números (Ex: 11999999999).", "error");
+    }
+
+    if(!nome || !email || !endereco || !numero) {
+        return notify("Preencha todos os campos obrigatórios.", "error");
+    }
 
     try {
         btn.innerText = "Criando..."; 
         btn.disabled = true;
         
-        // 1. Cria usuário no Auth
         const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
         const user = userCredential.user;
 
-        // 2. Atualiza nome no Auth
         await updateProfile(user, { displayName: nome });
 
-        // 3. Salva dados completos no Firestore
+        // Salva no Firestore
         await setDoc(doc(db, "users", user.uid), {
             nome: nome,
             email: email,
-            telefone: telefone,
+            telefone: telLimpo, // Salva limpo (apenas números)
             cep: cep,
             endereco: endereco,
             numero: numero,
@@ -91,6 +121,7 @@ document.getElementById('registerForm').addEventListener('submit', async functio
         console.error("Erro no registro:", error); 
         let msg = "Erro ao criar conta.";
         if(error.code === 'auth/email-already-in-use') msg = "Este e-mail já está sendo usado.";
+        if(error.code === 'auth/invalid-email') msg = "E-mail inválido.";
         notify(msg, "error");
         btn.innerText = "Cadastrar"; 
         btn.disabled = false;

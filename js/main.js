@@ -1,5 +1,5 @@
 import { db, auth } from "./firebaseConfig.js";
-import { collection, getDocs, addDoc, doc, updateDoc, query, where, getDoc } from "firebase/firestore";
+import { collection, getDocs, addDoc, doc, updateDoc, setDoc, increment, query, where, getDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 
 // --- 1. CONFIGURAÇÃO INICIAL ---
@@ -13,7 +13,7 @@ if(document.getElementById('theme-toggle')) {
 let carrinho = JSON.parse(localStorage.getItem('lston_carrinho')) || []; 
 let favoritos = JSON.parse(localStorage.getItem('lston_favoritos')) || []; 
 let todosProdutos = []; 
-let desconto = 0;
+let desconto = 0; // Desconto em porcentagem (0.10 = 10%)
 let freteValor = 0; 
 let currentUserEmail = null;
 let currentUserId = null;
@@ -73,7 +73,9 @@ onAuthStateChanged(auth, (user) => {
 async function carregarLoja() {
     if(container) container.innerHTML = '<p style="text-align:center; padding: 50px;">Carregando produtos...</p>';
     
-    // Carrega tudo em paralelo
+    // Inicia Contador de Visitas (Novo)
+    contarVisita();
+
     carregarBanners().catch(err => console.error("Erro banner:", err));
     carregarMenuCategorias().catch(err => console.error("Erro categorias:", err));
 
@@ -105,7 +107,24 @@ async function carregarLoja() {
     }
 }
 
-// --- NOVO: MENU DINÂMICO DE CATEGORIAS ---
+// --- NOVA FUNÇÃO: CONTADOR DE VISITAS ---
+async function contarVisita() {
+    // Verifica se já visitou nesta sessão para não contar F5 como nova visita
+    if(sessionStorage.getItem('lston_visitou')) return;
+    
+    try {
+        // Incrementa contador no Firebase (Cria o doc 'stats/geral' se não existir)
+        const statsRef = doc(db, "stats", "geral");
+        await setDoc(statsRef, { visitas: increment(1) }, { merge: true });
+        
+        sessionStorage.setItem('lston_visitou', 'true');
+        console.log("Visita contabilizada.");
+    } catch(e) {
+        console.warn("Erro ao contar visita:", e);
+    }
+}
+
+// --- MENU DINÂMICO ---
 async function carregarMenuCategorias() {
     const navMenu = document.getElementById('nav-menu');
     if(!navMenu) return;
@@ -114,23 +133,15 @@ async function carregarMenuCategorias() {
         const q = await getDocs(collection(db, "categorias"));
         let cats = [];
         q.forEach(d => cats.push(d.data().nome));
-        
-        // Ordena alfabeticamente
         cats.sort();
 
-        // Monta o HTML: Primeiro "Início", depois as categorias dinâmicas
         let html = `<a href="#" onclick="filtrarCategoria('Todas')" class="active-link">Início</a>`;
-        
         cats.forEach(cat => {
-            // Escapa aspas simples para não quebrar o onclick
             html += `<a href="#" onclick="filtrarCategoria('${cat}')">${cat}</a>`;
         });
-
         navMenu.innerHTML = html;
 
     } catch(e) {
-        console.warn("Erro ao carregar menu:", e);
-        // Fallback simples se der erro
         navMenu.innerHTML = `<a href="#" onclick="filtrarCategoria('Todas')">Início</a>`;
     }
 }
@@ -149,22 +160,39 @@ async function carregarBanners() {
 }
 window.mudarSlide = (n) => { const s = document.querySelectorAll('.slide'); if(s.length > 0) { slideIndex = (slideIndex + n + s.length) % s.length; document.getElementById('slider').style.transform = `translateX(-${slideIndex * 100}%)`; } }
 
-// --- 8. UI DA LOJA ---
+// --- 8. UI DA LOJA (COM BADGES) ---
 function exibirProdutos(lista) {
     if(!container) return;
     container.innerHTML = ''; 
     if(lista.length === 0) { container.innerHTML = '<p style="text-align:center; width:100%; padding:20px;">Nenhum produto encontrado.</p>'; return; }
+    
     lista.forEach(prod => {
         const card = document.createElement('div'); card.className = 'product-card';
         let capa = (prod.imagens && prod.imagens.length > 0) ? prod.imagens[0] : (prod.img || '');
         const est = parseInt(prod.estoque) || 0;
+        
         let priceHtml = `<div class="new-price">${window.fmtMoney(prod.preco)}</div>`;
-        if(prod.precoOriginal && prod.precoOriginal > prod.preco) priceHtml = `<div class="old-price">${window.fmtMoney(prod.precoOriginal)}</div><div class="new-price">${window.fmtMoney(prod.preco)}</div>`;
+        let badgeHtml = '';
+
+        if(prod.precoOriginal && prod.precoOriginal > prod.preco) {
+            priceHtml = `<div class="old-price">${window.fmtMoney(prod.precoOriginal)}</div><div class="new-price">${window.fmtMoney(prod.preco)}</div>`;
+            const pct = Math.round(((prod.precoOriginal - prod.preco) / prod.precoOriginal) * 100);
+            badgeHtml += `<span class="badge-off" style="position:absolute; top:10px; left:10px; background:#e74c3c; color:white; padding:4px 8px; border-radius:4px; font-size:11px; font-weight:bold; z-index:2;">-${pct}% OFF</span>`;
+        }
+
+        if(est > 0 && est < 5) {
+             const topPos = badgeHtml ? '35px' : '10px';
+             badgeHtml += `<span class="badge-stock" style="position:absolute; top:${topPos}; left:10px; background:#f39c12; color:white; padding:4px 8px; border-radius:4px; font-size:10px; font-weight:bold; z-index:2;">ÚLTIMAS UNIDADES</span>`;
+        }
+
         const heartClass = favoritos.includes(prod.id) ? 'fas fa-heart fav-btn active' : 'far fa-heart fav-btn';
-        card.innerHTML = `<i class="${heartClass}" onclick="toggleFavorito('${prod.id}', this, event)"></i>
+        
+        card.innerHTML = `
+            ${badgeHtml}
+            <i class="${heartClass}" onclick="toggleFavorito('${prod.id}', this, event)"></i>
             <div class="product-img" style="background-image: url('${capa}'); cursor: pointer;" onclick="window.location.href='produto.html?id=${prod.id}'"></div>
             <div style="width:100%;">
-                <h3>${prod.nome}</h3>
+                <h3 title="${prod.nome}">${prod.nome}</h3>
                 <div class="price-box">${priceHtml}</div>
                 <div class="card-qty-selector">
                     <button class="card-qty-btn" onclick="alterarQtdCard(this, -1)">-</button>
@@ -172,7 +200,9 @@ function exibirProdutos(lista) {
                     <button class="card-qty-btn" onclick="alterarQtdCard(this, 1)">+</button>
                 </div>
             </div>
-            <button class="btn-add" onclick="adicionarComQtd('${prod.id}', this)" ${est===0?'disabled':''}>${est===0?'Esgotado':'Adicionar'}</button>`;
+            <button class="btn-add" onclick="adicionarComQtd('${prod.id}', this)" ${est===0?'disabled':''}>
+                ${est===0?'Esgotado <i class="far fa-sad-tear"></i>':'Adicionar <i class="fas fa-cart-plus"></i>'}
+            </button>`;
         container.appendChild(card);
     });
 }
@@ -224,13 +254,21 @@ function atualizarCarrinhoUI() {
     if(!lista) return;
     let subtotal = 0; lista.innerHTML = '';
     if(carrinho.length === 0) { lista.innerHTML = '<p style="text-align:center; padding:20px; color:#999;">Vazio.</p>'; if(document.getElementById('cart-total')) document.getElementById('cart-total').innerHTML = "R$ 0,00"; return; }
+    
     carrinho.forEach((item, index) => {
         subtotal += parseFloat(item.preco) * item.qtd;
         lista.innerHTML += `<div class="cart-item"><div style="display:flex;align-items:center;"><img src="${item.img}"><div class="item-info"><strong>${item.nome}</strong><br>${window.fmtMoney(item.preco)}<div class="cart-qty-control"><button class="cart-qty-btn" onclick="alterarQtdCarrinho(${index}, -1)">-</button><span class="cart-qty-val">${item.qtd}</span><button class="cart-qty-btn" onclick="alterarQtdCarrinho(${index}, 1)">+</button></div></div></div><i class="fas fa-trash item-remove" onclick="window.removerDoCarrinho(${index})"></i></div>`;
     });
-    let total = subtotal - (subtotal * desconto); total += freteValor;
-    let texto = freteValor > 0 ? `Total: ${window.fmtMoney(total)} <br><small>(c/ frete)</small>` : `Total: ${window.fmtMoney(total)}`;
-    if(document.getElementById('cart-total')) document.getElementById('cart-total').innerHTML = texto;
+
+    // Aplica desconto (se houver) e frete
+    let total = subtotal - (subtotal * desconto); 
+    total += freteValor;
+    
+    let textoTotal = `Total: ${window.fmtMoney(total)}`;
+    if(freteValor > 0) textoTotal += ` <br><small>(c/ frete)</small>`;
+    if(desconto > 0) textoTotal += ` <br><small style="color:var(--green-color);">(-${desconto*100}% cupom)</small>`;
+
+    if(document.getElementById('cart-total')) document.getElementById('cart-total').innerHTML = textoTotal;
 }
 window.alterarQtdCarrinho = (index, delta) => { const item = carrinho[index]; const estoque = parseInt(item.estoque) || 0; if (delta > 0 && item.qtd + delta > estoque) { window.showToast("Limite!", "error"); return; } item.qtd += delta; if(item.qtd < 1) carrinho.splice(index, 1); localStorage.setItem('lston_carrinho', JSON.stringify(carrinho)); atualizarCarrinhoUI(); }
 window.removerDoCarrinho = (index) => { carrinho.splice(index, 1); localStorage.setItem('lston_carrinho', JSON.stringify(carrinho)); atualizarCarrinhoUI(); }
@@ -253,14 +291,11 @@ if (campoBusca) {
 window.filtrarPorPreco = () => { const min = parseFloat(document.getElementById('price-min').value)||0; const max = parseFloat(document.getElementById('price-max').value)||Infinity; exibirProdutos(todosProdutos.filter(p => p.preco >= min && p.preco <= max)); }
 window.ordenarProdutos = () => { const t = document.getElementById('sort-select').value; let l = [...todosProdutos]; if(t==='menor') l.sort((a,b)=>a.preco-b.preco); if(t==='maior') l.sort((a,b)=>b.preco-a.preco); exibirProdutos(l); }
 
-// Filtro de Categoria (Integração com Menu Dinâmico)
+// Filtro de Categoria
 window.filtrarCategoria = (cat) => { 
     document.getElementById('titulo-secao').innerText = cat === 'Todas' ? 'Todos os Produtos' : cat; 
-    
-    // Atualiza classe ativa no menu
     const links = document.querySelectorAll('.nav-menu a');
     links.forEach(l => l.classList.remove('active-link'));
-    // Tenta encontrar o link clicado (simplificado)
     const clicked = Array.from(links).find(l => l.innerText === cat || (cat === 'Todas' && l.innerText === 'Início'));
     if(clicked) clicked.classList.add('active-link');
 
@@ -321,6 +356,56 @@ window.calcularFreteCarrinho = async () => {
     } catch(e){ resultDiv.innerText = "Erro."; } finally { window.toggleLoading(false); }
 }
 
+// --- FUNÇÃO DE CUPOM REAL ---
+window.aplicarCupom = async () => {
+    const input = document.getElementById('cupom-input');
+    const codigoDigitado = input.value.trim().toUpperCase();
+    
+    if(!codigoDigitado) return window.showToast("Digite um código!", "error");
+    window.toggleLoading(true);
+
+    try {
+        const q = query(collection(db, "cupons"), where("codigo", "==", codigoDigitado));
+        const querySnapshot = await getDocs(q);
+
+        if (querySnapshot.empty) {
+            window.toggleLoading(false);
+            return window.showToast("Cupom inválido.", "error");
+        }
+
+        let cupomValido = null;
+        querySnapshot.forEach(doc => { cupomValido = doc.data(); });
+
+        if(cupomValido.validade) {
+            const hoje = new Date();
+            const validade = new Date(cupomValido.validade);
+            // Corrige fuso adicionando horas para garantir comparação correta do dia
+            validade.setHours(23, 59, 59);
+            
+            if(hoje > validade) {
+                window.toggleLoading(false);
+                return window.showToast("Este cupom venceu!", "error");
+            }
+        }
+
+        const percentual = parseFloat(cupomValido.desconto);
+        if(percentual > 0) {
+            desconto = percentual / 100;
+            window.showToast(`Desconto de ${percentual}% aplicado!`, "success");
+            input.disabled = true;
+            input.style.borderColor = "green";
+            input.value += " (Aplicado)";
+            atualizarCarrinhoUI();
+        }
+
+    } catch (e) {
+        console.error(e);
+        window.showToast("Erro ao validar cupom.", "error");
+    } finally {
+        window.toggleLoading(false);
+    }
+}
+
 // --- CONFIRMAÇÃO COM REDIRECIONAMENTO ---
 window.confirmarPedido = async () => {
     const nome = document.getElementById('check-nome').value;
@@ -358,10 +443,9 @@ window.confirmarPedido = async () => {
             if (parseInt(prodSnap.data().estoque) < item.qtd) throw new Error(`Estoque insuficiente: ${item.nome}`);
         }
         
-        // Salva e recebe o ID do documento criado
         const docRef = await addDoc(collection(db, "pedidos"), { 
             cliente: nome, telefone, endereco, cidade, cep, pagamento, itens: carrinho, 
-            total: totalFinal, frete: freteValor, data: new Date().toISOString(), 
+            total: totalFinal, frete: freteValor, descontoAplicado: desconto, data: new Date().toISOString(), 
             status: "Recebido", userEmail: currentUserEmail 
         });
         
@@ -372,12 +456,10 @@ window.confirmarPedido = async () => {
             await updateDoc(ref, { estoque: nv });
         }
         
-        // Limpa carrinho e redireciona para SUCESSO
         carrinho=[]; 
         localStorage.setItem('lston_carrinho', '[]'); 
         atualizarCarrinhoUI(); 
         
-        // REDIRECIONA COM ID E MÉTODO
         window.location.href = `sucesso.html?id=${docRef.id}&method=${pagamento}`;
 
     } catch(e) { 
@@ -389,5 +471,4 @@ window.confirmarPedido = async () => {
 // Inicializa
 carregarLoja(); 
 atualizarCarrinhoUI();
-window.aplicarCupom = async () => { window.showToast("Use os cupons na página inicial.", "info"); }
 window.assinarNews = async () => { const email = document.getElementById('news-email').value; if(email) { await addDoc(collection(db, "newsletter"), { email, data: new Date() }); window.showToast("Inscrito!"); } }
