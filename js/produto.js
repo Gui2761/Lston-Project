@@ -73,8 +73,10 @@ async function carregarProdutosFavoritos(listaEl) {
     const q = query(collection(db, "produtos"), where("__name__", "in", idsParaBuscar));
     const snap = await getDocs(q);
     
+    const idsEncontrados = [];
     snap.forEach(d => {
         const item = d.data(); item.id = d.id;
+        idsEncontrados.push(item.id);
         let img = (item.imagens && item.imagens.length > 0) ? item.imagens[0] : (item.img || '');
         listaEl.innerHTML += `
             <div class="cart-item">
@@ -88,6 +90,18 @@ async function carregarProdutosFavoritos(listaEl) {
                 </div>
             </div>`;
     });
+
+    // --- CORREÇÃO: Limpeza de Fantasmas na Página de Produto ---
+    // Se o número de itens encontrados for menor do que os buscados, limpa os inválidos do lote
+    if(idsEncontrados.length < idsParaBuscar.length) {
+        // Mantém apenas os que foram encontrados OU os que não foram buscados (paginação)
+        const novosFavoritos = favoritos.filter(id => !idsParaBuscar.includes(id) || idsEncontrados.includes(id));
+        favoritos = novosFavoritos;
+        localStorage.setItem('lston_favoritos', JSON.stringify(favoritos));
+        // Atualiza contador
+        const favCount = document.getElementById('fav-count');
+        if(favCount) favCount.innerText = favoritos.length;
+    }
 }
 
 // Função auxiliar para o modal de favoritos
