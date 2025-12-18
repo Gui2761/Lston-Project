@@ -69,10 +69,13 @@ onAuthStateChanged(auth, (user) => {
     }
 });
 
-// --- 6. CORE: LOJA E FAVORITOS ---
+// --- 6. CORE: LOJA E MENU DINÂMICO ---
 async function carregarLoja() {
     if(container) container.innerHTML = '<p style="text-align:center; padding: 50px;">Carregando produtos...</p>';
+    
+    // Carrega tudo em paralelo
     carregarBanners().catch(err => console.error("Erro banner:", err));
+    carregarMenuCategorias().catch(err => console.error("Erro categorias:", err));
 
     try {
         const q = await getDocs(collection(db, "produtos"));
@@ -90,7 +93,6 @@ async function carregarLoja() {
         favoritos = favoritos.filter(id => idsExistentes.includes(id));
         
         if(favoritos.length !== totalAntes) {
-            console.log("Favoritos limpos.");
             localStorage.setItem('lston_favoritos', JSON.stringify(favoritos));
         }
 
@@ -100,6 +102,36 @@ async function carregarLoja() {
     } catch (e) { 
         console.error("Erro fatal ao carregar loja:", e); 
         if(container) container.innerHTML = '<p style="text-align:center; color:red;">Erro ao carregar produtos.</p>';
+    }
+}
+
+// --- NOVO: MENU DINÂMICO DE CATEGORIAS ---
+async function carregarMenuCategorias() {
+    const navMenu = document.getElementById('nav-menu');
+    if(!navMenu) return;
+
+    try {
+        const q = await getDocs(collection(db, "categorias"));
+        let cats = [];
+        q.forEach(d => cats.push(d.data().nome));
+        
+        // Ordena alfabeticamente
+        cats.sort();
+
+        // Monta o HTML: Primeiro "Início", depois as categorias dinâmicas
+        let html = `<a href="#" onclick="filtrarCategoria('Todas')" class="active-link">Início</a>`;
+        
+        cats.forEach(cat => {
+            // Escapa aspas simples para não quebrar o onclick
+            html += `<a href="#" onclick="filtrarCategoria('${cat}')">${cat}</a>`;
+        });
+
+        navMenu.innerHTML = html;
+
+    } catch(e) {
+        console.warn("Erro ao carregar menu:", e);
+        // Fallback simples se der erro
+        navMenu.innerHTML = `<a href="#" onclick="filtrarCategoria('Todas')">Início</a>`;
     }
 }
 
@@ -220,7 +252,20 @@ if (campoBusca) {
 }
 window.filtrarPorPreco = () => { const min = parseFloat(document.getElementById('price-min').value)||0; const max = parseFloat(document.getElementById('price-max').value)||Infinity; exibirProdutos(todosProdutos.filter(p => p.preco >= min && p.preco <= max)); }
 window.ordenarProdutos = () => { const t = document.getElementById('sort-select').value; let l = [...todosProdutos]; if(t==='menor') l.sort((a,b)=>a.preco-b.preco); if(t==='maior') l.sort((a,b)=>b.preco-a.preco); exibirProdutos(l); }
-window.filtrarCategoria = (cat) => { document.getElementById('titulo-secao').innerText = cat; exibirProdutos(cat==='Todas'?todosProdutos:todosProdutos.filter(p=>p.categoria===cat)); }
+
+// Filtro de Categoria (Integração com Menu Dinâmico)
+window.filtrarCategoria = (cat) => { 
+    document.getElementById('titulo-secao').innerText = cat === 'Todas' ? 'Todos os Produtos' : cat; 
+    
+    // Atualiza classe ativa no menu
+    const links = document.querySelectorAll('.nav-menu a');
+    links.forEach(l => l.classList.remove('active-link'));
+    // Tenta encontrar o link clicado (simplificado)
+    const clicked = Array.from(links).find(l => l.innerText === cat || (cat === 'Todas' && l.innerText === 'Início'));
+    if(clicked) clicked.classList.add('active-link');
+
+    exibirProdutos(cat==='Todas'?todosProdutos:todosProdutos.filter(p=>p.categoria===cat)); 
+}
 
 // --- 12. CHECKOUT E PEDIDO ---
 window.irParaCheckout = async () => { 
