@@ -73,7 +73,7 @@ window.salvarDadosPerfil = async () => {
     }
 }
 
-// --- PEDIDOS ---
+// --- PEDIDOS (EXPANSÍVEL) ---
 async function carregarPedidos(email) {
     try {
         const q = query(collection(db, "pedidos"), where("userEmail", "==", email));
@@ -81,13 +81,15 @@ async function carregarPedidos(email) {
 
         pedidosList.innerHTML = '';
         if (querySnapshot.empty) { 
-            pedidosList.innerHTML = '<p style="color:var(--text-muted)">Você ainda não fez nenhum pedido.</p>'; 
+            pedidosList.innerHTML = '<p style="color:var(--text-muted); text-align:center;">Você ainda não fez nenhum pedido.</p>'; 
             return; 
         }
 
         querySnapshot.forEach((doc) => {
             const p = doc.data();
             const data = new Date(p.data).toLocaleDateString('pt-BR');
+            const idCurto = doc.id.slice(0, 8).toUpperCase();
+            
             let itensHtml = '';
             if(p.itens) {
                 p.itens.forEach(item => {
@@ -104,13 +106,29 @@ async function carregarPedidos(email) {
 
             const card = document.createElement('div');
             card.className = "order-card"; 
+            // Adiciona evento de clique para o acordeão
+            card.onclick = function() { this.classList.toggle('active'); };
+            
             card.innerHTML = `
                 <div class="order-header">
-                    <span><strong>Data:</strong> ${data}</span>
-                    <span class="status-badge status-${(p.status||'recebido').toLowerCase()}">${p.status||'Recebido'}</span>
+                    <div>
+                        <span style="font-weight:bold; font-size:14px;">Pedido #${idCurto}</span>
+                        <br>
+                        <span style="font-size:12px; color:var(--text-muted);">${data}</span>
+                        <br>
+                        <span class="status-badge status-${(p.status||'recebido').toLowerCase()}">${p.status||'Recebido'}</span>
+                    </div>
+                    <div style="text-align:right; padding-right: 25px;">
+                        <div style="font-weight:bold; color:var(--text-color); font-size:16px;">${fmtMoney(p.total)}</div>
+                        <div style="font-size:11px; color:var(--text-muted);">${p.itens ? p.itens.length : 0} itens</div>
+                    </div>
                 </div>
-                <div>${itensHtml}</div>
-                <div class="order-total">Total: ${fmtMoney(p.total)}</div>
+                
+                <div class="order-details">
+                    <p style="font-size:13px; margin-bottom:10px;"><strong>Entrega em:</strong> ${p.endereco}, ${p.numero||''} - ${p.bairro||''}</p>
+                    ${itensHtml}
+                    <div class="order-total">Total: ${fmtMoney(p.total)}</div>
+                </div>
             `;
             pedidosList.appendChild(card);
         });

@@ -23,7 +23,7 @@
     color: var(--text-color);
 }
 
-/* Lista de Pedidos */
+/* Lista de Pedidos (Estilo Base) */
 .order-card {
     background: var(--card-bg);
     border: 1px solid var(--border-color);
@@ -32,16 +32,27 @@
     margin-bottom: 20px;
     box-shadow: 0 4px 6px rgba(0,0,0,0.05);
     transition: transform 0.2s;
+    cursor: pointer; /* Indica que é clicável */
+    position: relative; /* Para posicionar a seta */
 }
 .order-card:hover { transform: translateY(-2px); }
 
 .order-header {
     display: flex; justify-content: space-between; align-items: center;
-    border-bottom: 1px solid var(--border-color);
-    padding-bottom: 10px; margin-bottom: 15px;
     color: var(--text-color);
 }
 
+/* Detalhes do Pedido (Acordeão) */
+.order-details {
+    display: none; /* Escondido por padrão */
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px dashed var(--border-color);
+    animation: fadeIn 0.3s ease;
+}
+.order-card.active .order-details { display: block; /* Mostra quando ativo */ }
+
+/* Itens do Pedido */
 .order-item {
     display: flex; align-items: center; gap: 15px; margin-bottom: 10px;
     color: var(--text-color);
@@ -53,15 +64,34 @@
     border-top: 1px solid var(--border-color); padding-top: 10px;
 }
 
-/* BADGES DE STATUS (O que estava faltando) */
+/* Setinha indicadora */
+.order-card::after {
+    content: '\f078'; /* Seta para baixo (FontAwesome) */
+    font-family: 'Font Awesome 5 Free';
+    font-weight: 900;
+    position: absolute;
+    top: 25px; /* Ajuste conforme padding */
+    right: 20px;
+    color: var(--text-muted);
+    transition: 0.3s;
+    font-size: 14px;
+}
+.order-card.active::after { transform: rotate(180deg); color: var(--accent-color); }
+
+/* Animação */
+@keyframes fadeIn { from { opacity:0; transform:translateY(-5px); } to { opacity:1; transform:translateY(0); } }
+
+/* BADGES DE STATUS */
 .status-badge {
-    padding: 6px 12px;
+    padding: 4px 10px;
     border-radius: 20px;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: bold;
     color: white;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    margin-top: 5px;
+    display: inline-block;
 }
 .status-recebido { background-color: #95a5a6; }     /* Cinza */
 .status-preparando { background-color: #f39c12; }   /* Laranja */

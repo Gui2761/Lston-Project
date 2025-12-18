@@ -11,9 +11,9 @@ const cuponsCollection = collection(db, "cupons");
 let chartCat=null, chartFat=null;
 let todosPedidosCache = [];
 let todosProdutosCache = []; 
-let filesToUpload = []; // ARRAY PARA O DRAG & DROP
+let filesToUpload = []; 
 
-// --- TEMA ADMIN ---
+// --- TEMA ---
 const savedTheme = localStorage.getItem('lston_theme') || 'light';
 document.body.setAttribute('data-theme', savedTheme);
 if(document.getElementById('theme-toggle-admin')) {
@@ -28,85 +28,48 @@ window.toggleThemeAdmin = () => {
     document.getElementById('theme-toggle-admin').className = newTheme === 'dark' ? 'fas fa-sun theme-toggle-admin' : 'fas fa-moon theme-toggle-admin';
 }
 
-// --- AUTH E SEGURANÇA ---
+// --- AUTH ---
 onAuthStateChanged(auth, (user) => { 
-    if(!user) {
-        window.location.href="login.html"; 
-    } else if (user.email !== "admin@lston.com") {
-        // TRAVA DE SEGURANÇA
-        alert("Acesso Negado! Área exclusiva para administradores.");
-        signOut(auth).then(() => window.location.href = "index.html");
+    if(!user) { window.location.href="login.html"; } 
+    else if (user.email !== "admin@lston.com") { 
+        alert("Acesso Negado!"); 
+        signOut(auth).then(() => window.location.href = "index.html"); 
     } else { 
-        renderizarTabela(); 
-        renderizarDashboard(); 
-        renderizarBanners(); 
-        renderizarCupons(); 
-        initDragAndDrop(); // INICIA O DRAG & DROP
+        renderizarTabela(); renderizarDashboard(); renderizarBanners(); renderizarCupons(); initDragAndDrop(); 
     } 
 });
 
 // --- HELPERS ---
 function showToast(msg, type='success') { if(typeof Toastify !== 'undefined') Toastify({ text: msg, duration: 3000, style: { background: type==='error'?"#c62828":"#2c3e50" } }).showToast(); }
-function toggleLoading(show) { const el = document.getElementById('loading-overlay'); if(el) el.style.display = show ? 'flex' : 'none'; }
+function toggleLoading(show) { document.getElementById('loading-overlay').style.display = show ? 'flex' : 'none'; }
 function fmtMoney(val) { return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val); }
 
-// --- DRAG & DROP LOGIC ---
+// --- DRAG & DROP ---
 function initDragAndDrop() {
     const dropZone = document.getElementById('drop-zone');
     const input = document.getElementById('prod-imgs-hidden');
-    
     if(!dropZone || !input) return;
-
-    // Clique na zona abre o seletor
     dropZone.addEventListener('click', () => input.click());
-    
-    input.addEventListener('change', () => {
-        handleFiles(Array.from(input.files));
-    });
-    
-    // Efeitos visuais
+    input.addEventListener('change', () => { handleFiles(Array.from(input.files)); });
     dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
     dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
-    
-    // Soltar arquivos
-    dropZone.addEventListener('drop', (e) => {
-        e.preventDefault();
-        dropZone.classList.remove('drag-over');
-        handleFiles(Array.from(e.dataTransfer.files));
-    });
+    dropZone.addEventListener('drop', (e) => { e.preventDefault(); dropZone.classList.remove('drag-over'); handleFiles(Array.from(e.dataTransfer.files)); });
 }
-
 function handleFiles(files) {
     const validFiles = files.filter(f => f.type.startsWith('image/'));
-    if (filesToUpload.length + validFiles.length > 4) {
-        showToast("Máximo de 4 imagens!", "error");
-        return;
-    }
+    if (filesToUpload.length + validFiles.length > 4) { showToast("Máximo de 4 imagens!", "error"); return; }
     filesToUpload = [...filesToUpload, ...validFiles];
     updatePreviews();
 }
-
 function updatePreviews() {
-    const container = document.getElementById('preview-container');
-    container.innerHTML = '';
-    
+    const container = document.getElementById('preview-container'); container.innerHTML = '';
     filesToUpload.forEach((file, index) => {
         const reader = new FileReader();
-        reader.onload = (e) => {
-            container.innerHTML += `
-                <div class="preview-card">
-                    <img src="${e.target.result}">
-                    <div class="remove-btn" onclick="removeFile(${index})">x</div>
-                </div>`;
-        };
+        reader.onload = (e) => { container.innerHTML += `<div class="preview-card"><img src="${e.target.result}"><div class="remove-btn" onclick="removeFile(${index})">x</div></div>`; };
         reader.readAsDataURL(file);
     });
 }
-
-window.removeFile = (index) => {
-    filesToUpload.splice(index, 1);
-    updatePreviews();
-}
+window.removeFile = (index) => { filesToUpload.splice(index, 1); updatePreviews(); }
 
 // --- NAVEGAÇÃO ---
 const sections = ['dashboard','produtos','pedidos','banners','cupons'];
@@ -134,119 +97,125 @@ async function renderizarDashboard() {
     const q = await getDocs(pedidosCollection);
     let cats={}, dias={}, totalFat=0, totalVendas=0;
     const hoje = new Date().toLocaleDateString('pt-BR');
-
     todosPedidosCache = [];
     q.forEach(d => {
         const p = d.data(); p.id = d.id; 
-        const dataPedido = new Date(p.data).toLocaleDateString('pt-BR');
-        
-        // Filtro de Data
+        const dataPedido = p.data ? new Date(p.data).toLocaleDateString('pt-BR') : '';
         if (filtroData === 'hoje' && dataPedido !== hoje) return;
-
-        todosPedidosCache.push(p);
-        totalVendas++; 
-        totalFat += p.total||0;
-        
+        todosPedidosCache.push(p); totalVendas++; totalFat += p.total||0;
         if(p.itens) p.itens.forEach(i => cats[i.categoria||'Geral'] = (cats[i.categoria||'Geral']||0)+1);
-        const dStr = dataPedido.slice(0,5);
-        dias[dStr] = (dias[dStr]||0)+p.total;
+        const dStr = dataPedido.slice(0,5); dias[dStr] = (dias[dStr]||0)+p.total;
     });
-    
     document.getElementById('kpi-faturamento').innerText = fmtMoney(totalFat);
     document.getElementById('kpi-vendas').innerText = totalVendas;
-    
-    // Calcula Estoque Total e Verifica Críticos
-    const totalEstoqueEl = document.getElementById('total-estoque-count');
-    if(totalEstoqueEl && todosProdutosCache.length > 0) {
-        totalEstoqueEl.innerText = todosProdutosCache.reduce((sum, p) => sum + (parseInt(p.estoque)||0), 0);
+    if(document.getElementById('total-estoque-count') && todosProdutosCache.length > 0) { 
+        document.getElementById('total-estoque-count').innerText = todosProdutosCache.reduce((sum, p) => sum + (parseInt(p.estoque)||0), 0); 
     }
-    
-    verificarEstoqueCritico();
-    desenharGraficos(cats, dias);
-    filtrarPedidos();
+    verificarEstoqueCritico(); desenharGraficos(cats, dias); filtrarPedidos();
 }
 
 async function verificarEstoqueCritico() {
-    // Se cache vazio, busca produtos
     if(todosProdutosCache.length === 0) await renderizarTabela();
-    
     const criticos = todosProdutosCache.filter(p => (parseInt(p.estoque)||0) <= 5).map(p => p.nome);
     const alertaContainer = document.getElementById('alerta-estoque-container');
-    
     if (criticos.length > 0 && alertaContainer) {
         alertaContainer.style.display = 'block';
-        alertaContainer.innerHTML = `
-            <div style="background: #fff3cd; border-left: 5px solid #ffc107; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-                <h4 style="color: #856404; margin-bottom: 5px;"><i class="fas fa-exclamation-triangle"></i> Estoque Crítico</h4>
-                <p style="font-size: 13px;">Baixo estoque em: <strong>${criticos.slice(0, 5).join(", ")}${criticos.length>5?'...':''}</strong></p>
-            </div>`;
-    } else if (alertaContainer) {
-        alertaContainer.style.display = 'none';
-    }
+        alertaContainer.innerHTML = `<div style="background: #fff3cd; border-left: 5px solid #ffc107; padding: 15px; border-radius: 8px; margin-bottom: 20px;"><h4 style="color: #856404; margin-bottom: 5px;"><i class="fas fa-exclamation-triangle"></i> Estoque Crítico</h4><p style="font-size: 13px;">Baixo estoque: <strong>${criticos.slice(0, 5).join(", ")}${criticos.length>5?'...':''}</strong></p></div>`;
+    } else if (alertaContainer) { alertaContainer.style.display = 'none'; }
 }
 
 function desenharGraficos(cats, dias) {
     const ctxCat = document.getElementById('graficoCategorias');
     const ctxFat = document.getElementById('graficoFaturamento');
     if(!ctxCat || !ctxFat) return;
-
     if(chartCat) chartCat.destroy(); if(chartFat) chartFat.destroy();
     chartCat = new Chart(ctxCat, { type:'doughnut', data:{ labels:Object.keys(cats), datasets:[{data:Object.values(cats), backgroundColor:['#e74c3c','#3498db','#f1c40f','#2ecc71']}] } });
     const sorted = Object.keys(dias).sort();
     chartFat = new Chart(ctxFat, { type:'line', data:{ labels:sorted, datasets:[{label:'Faturamento', data:sorted.map(d=>dias[d]), borderColor:'#8bc34a', fill:true}] } });
 }
 
-// --- PEDIDOS ---
+// --- PEDIDOS (CORRIGIDO E OTIMIZADO) ---
 const filtroStatusEl = document.getElementById('filtro-status');
 if(filtroStatusEl) filtroStatusEl.addEventListener('change', filtrarPedidos);
 
-function filtrarPedidos() {
-    const filtro = filtroStatusEl ? filtroStatusEl.value : 'Todos';
+window.filtrarPedidos = () => {
+    const filtroStatus = document.getElementById('filtro-status') ? document.getElementById('filtro-status').value : 'Todos';
+    const termoBusca = document.getElementById('busca-pedido') ? document.getElementById('busca-pedido').value.toLowerCase() : '';
+    
     const tbody = document.getElementById('tabela-pedidos');
-    if(!tbody) return;
-    tbody.innerHTML = '';
-    const lista = filtro === 'Todos' ? todosPedidosCache : todosPedidosCache.filter(p => p.status === filtro);
+    if(!tbody) return; 
+    
+    // Filtro Seguro
+    const lista = todosPedidosCache.filter(p => {
+        const matchStatus = filtroStatus === 'Todos' || p.status === filtroStatus;
+        const nomeCliente = p.cliente ? p.cliente.toLowerCase() : "";
+        const idPedido = p.id ? p.id.toLowerCase() : "";
+        const matchTexto = nomeCliente.includes(termoBusca) || idPedido.includes(termoBusca);
+        return matchStatus && matchTexto;
+    });
+
+    if(lista.length === 0) { 
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:var(--text-light);">Nenhum pedido encontrado.</td></tr>'; 
+        return; 
+    }
+
+    // Renderização Otimizada (Monta String -> Insere HTML -> Adiciona Eventos)
+    let html = '';
     lista.forEach(p => {
         const opts = ['Recebido','Enviado','Entregue'];
-        let sel = `<select id="st-${p.id}" style="padding:5px;">`;
-        opts.forEach(o => sel += `<option value="${o}" ${p.status===o?'selected':''}>${o}</option>`);
+        let sel = `<select id="st-${p.id}" class="status-select" style="padding:5px;">`; 
+        opts.forEach(o => sel += `<option value="${o}" ${p.status===o?'selected':''}>${o}</option>`); 
         sel += `</select>`;
-        tbody.innerHTML += `<tr><td>${new Date(p.data).toLocaleDateString('pt-BR')}</td><td>${p.cliente}</td><td>${fmtMoney(p.total)}</td><td>${sel}</td><td><button onclick="window.verDetalhes('${p.id}')" style="background:#2196f3; color:white; border:none; padding:5px;"><i class="fas fa-eye"></i></button></td></tr>`;
-        setTimeout(() => {
-            const stEl = document.getElementById(`st-${p.id}`);
-            if(stEl) stEl.addEventListener('change', (e)=>updateStatus(p.id, e.target.value));
-        }, 100);
+        
+        const idCurto = p.id ? p.id.slice(0, 6).toUpperCase() : '???';
+        const data = p.data ? new Date(p.data).toLocaleDateString('pt-BR') : '-';
+
+        html += `<tr>
+            <td><small style="color:var(--accent)">#${idCurto}</small><br>${data}</td>
+            <td>${p.cliente || 'Sem Nome'}</td>
+            <td>${fmtMoney(p.total || 0)}</td>
+            <td>${sel}</td>
+            <td><button class="btn-details" data-id="${p.id}" style="background:#2196f3; color:white; border:none; padding:5px;"><i class="fas fa-eye"></i></button></td>
+        </tr>`;
+    });
+    
+    tbody.innerHTML = html;
+
+    // Reconecta os eventos após inserir o HTML
+    lista.forEach(p => {
+        const sel = document.getElementById(`st-${p.id}`);
+        if(sel) sel.addEventListener('change', (e) => updateStatus(p.id, e.target.value));
+        
+        // Botão detalhes (usando seletor para garantir)
+        const btn = tbody.querySelector(`button[data-id="${p.id}"]`);
+        if(btn) btn.onclick = () => window.verDetalhes(p.id);
     });
 }
-async function updateStatus(id, st) { try { await updateDoc(doc(db,"pedidos",id), {status:st}); showToast("Atualizado!"); } catch(e) { showToast("Erro", "error"); } }
+
+async function updateStatus(id, st) { 
+    try { 
+        await updateDoc(doc(db,"pedidos",id), {status:st}); 
+        // Atualiza cache local para não precisar recarregar
+        const item = todosPedidosCache.find(x => x.id === id);
+        if(item) item.status = st;
+        showToast("Status atualizado!"); 
+    } catch(e) { showToast("Erro ao atualizar status", "error"); } 
+}
 
 window.verDetalhes = (id) => { 
     const p = todosPedidosCache.find(x => x.id === id); 
     if(p) { 
-        document.getElementById('conteudo-detalhes').innerHTML=`
-            <div style="font-size:14px; line-height:1.6;">
-                <p><strong>Cliente:</strong> ${p.cliente} <span style="font-size:12px; color:#666;">(${p.userEmail})</span></p>
-                <p><strong>Telefone:</strong> ${p.telefone || 'Não informado'}</p>
-                <hr style="margin:10px 0; border-top:1px solid #eee;">
-                <p><strong>Endereço:</strong> ${p.endereco}</p>
-                <p><strong>Cidade/CEP:</strong> ${p.cidade || '-'} / ${p.cep || '-'}</p>
-                <hr style="margin:10px 0; border-top:1px solid #eee;">
-                <p><strong>Pagamento:</strong> ${p.pagamento || 'Não informado'}</p>
-                <p><strong>Status:</strong> <span style="background:${p.status==='Entregue'?'#2ecc71':'#f39c12'}; color:white; padding:2px 6px; border-radius:4px; font-size:12px;">${p.status}</span></p>
-                <hr style="margin:10px 0; border-top:1px solid #eee;">
-                <p style="font-weight:bold;">Itens:</p>
-                <ul>${p.itens.map(i=>`<li>${i.nome} - (${i.qtd}x) - ${fmtMoney(i.preco)}</li>`).join('')}</ul>
-                <hr style="margin:10px 0; border-top:1px solid #eee;">
-                <p>Subtotal + Frete: <span style="float:right;">${fmtMoney(p.total - (p.frete||0))} + ${fmtMoney(p.frete||0)}</span></p>
-                <p style="font-size:18px; font-weight:bold; color:#2c3e50; margin-top:5px;">Total: <span style="float:right;">${fmtMoney(p.total)}</span></p>
-            </div>`; 
+        document.getElementById('conteudo-detalhes').innerHTML=`<div style="font-size:14px; line-height:1.6;"><p><strong>Cliente:</strong> ${p.cliente} <span style="font-size:12px; color:#666;">(${p.userEmail})</span></p><p><strong>Telefone:</strong> ${p.telefone || 'Não informado'}</p><hr style="margin:10px 0; border-top:1px solid #eee;"><p><strong>Endereço:</strong> ${p.endereco}</p><p><strong>Cidade/CEP:</strong> ${p.cidade || '-'} / ${p.cep || '-'}</p><hr style="margin:10px 0; border-top:1px solid #eee;"><p><strong>Pagamento:</strong> ${p.pagamento || 'Não informado'}</p><p><strong>Status:</strong> <span style="background:${p.status==='Entregue'?'#2ecc71':'#f39c12'}; color:white; padding:2px 6px; border-radius:4px; font-size:12px;">${p.status}</span></p><hr style="margin:10px 0; border-top:1px solid #eee;"><p style="font-weight:bold;">Itens:</p><ul>${(p.itens||[]).map(i=>`<li>${i.nome} - (${i.qtd}x) - ${fmtMoney(i.preco)}</li>`).join('')}</ul><hr style="margin:10px 0; border-top:1px solid #eee;"><p>Subtotal + Frete: <span style="float:right;">${fmtMoney(p.total - (p.frete||0))} + ${fmtMoney(p.frete||0)}</span></p><p style="font-size:18px; font-weight:bold; color:#2c3e50; margin-top:5px;">Total: <span style="float:right;">${fmtMoney(p.total)}</span></p></div>`; 
         document.getElementById('modalDetalhes').style.display='flex'; 
     } 
 }
 
 window.exportarPedidos = () => {
     let csv = "Data,Cliente,Email,Telefone,Total,Status\n";
-    todosPedidosCache.forEach(p => { csv += `${new Date(p.data).toLocaleDateString()},${p.cliente},${p.userEmail},${p.telefone||''},${p.total},${p.status}\n`; });
+    todosPedidosCache.forEach(p => { 
+        const data = p.data ? new Date(p.data).toLocaleDateString() : '-';
+        csv += `${data},${p.cliente},${p.userEmail},${p.telefone||''},${p.total},${p.status}\n`; 
+    });
     const a = document.createElement('a'); a.href = window.URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = 'pedidos.csv'; a.click();
 };
 
@@ -264,13 +233,8 @@ async function renderizarTabela() {
 }
 
 window.editarProduto = async (id) => {
-    toggleLoading(true);
-    // Limpa estado anterior do Drag & Drop
-    filesToUpload = [];
-    document.getElementById('preview-container').innerHTML = '';
-    
-    const d = await getDoc(doc(db,"produtos",id));
-    toggleLoading(false);
+    toggleLoading(true); filesToUpload = []; document.getElementById('preview-container').innerHTML = '';
+    const d = await getDoc(doc(db,"produtos",id)); toggleLoading(false);
     if(d.exists()) {
         const p = d.data();
         document.getElementById('prod-id').value=id; document.getElementById('modal-titulo').innerText="Editar Produto";
@@ -278,13 +242,9 @@ window.editarProduto = async (id) => {
         document.getElementById('prod-preco-antigo').value=p.precoOriginal || "";
         document.getElementById('prod-estoque').value=p.estoque; document.getElementById('prod-cat').value=p.categoria;
         document.getElementById('prod-desc').value=p.descricao;
-        
-        // Exibe imagens existentes (visualização apenas)
         if(p.imagens && p.imagens.length > 0) {
             const container = document.getElementById('preview-container');
-            p.imagens.forEach(url => {
-                container.innerHTML += `<div class="preview-card"><img src="${url}"><div class="remove-btn" style="background:#ccc;cursor:default;">i</div></div>`;
-            });
+            p.imagens.forEach(url => { container.innerHTML += `<div class="preview-card"><img src="${url}"><div class="remove-btn" style="background:#ccc;cursor:default;">i</div></div>`; });
         }
         document.getElementById('modalProduto').style.display='flex';
     }
@@ -298,30 +258,21 @@ document.getElementById('btn-save-prod').addEventListener('click', async functio
     const est = document.getElementById('prod-estoque').value;
     const cat = document.getElementById('prod-cat').value;
     const desc = document.getElementById('prod-desc').value;
-
     if(!nome || !preco) return showToast("Preencha campos!", "error");
     toggleLoading(true);
-
     try {
         let urls = [];
-        // UPLOAD DO DRAG & DROP
         for (const file of filesToUpload) {
             const s = await uploadBytes(ref(storage, `produtos/${Date.now()}_${file.name}`), file);
             urls.push(await getDownloadURL(s.ref));
         }
-
         let dados = { nome, preco:parseFloat(preco), precoOriginal: precoAntigo ? parseFloat(precoAntigo) : null, estoque:parseInt(est), categoria:cat, descricao:desc };
-        
         if(id) { 
             const docSnap = await getDoc(doc(db, "produtos", id));
             let imagensAtuais = docSnap.exists() ? (docSnap.data().imagens || []) : [];
-            // Se subiu novas, substitui. Se não, mantém antigas.
             if(urls.length > 0) { dados.imagens = urls; } else { dados.imagens = imagensAtuais; }
             await updateDoc(doc(db,"produtos",id), dados); 
-        } else { 
-            dados.imagens=urls; dados.dataCriacao=new Date(); 
-            await addDoc(produtosCollection, dados); 
-        }
+        } else { dados.imagens=urls; dados.dataCriacao=new Date(); await addDoc(produtosCollection, dados); }
         showToast("Salvo!"); window.fecharModal(); renderizarTabela(); renderizarDashboard();
     } catch(e){ console.error(e); showToast("Erro ao salvar.", "error"); } finally { toggleLoading(false); }
 });
@@ -331,10 +282,7 @@ async function renderizarBanners() {
     const tbody = document.getElementById('tabela-banners');
     const q = await getDocs(bannersCollection);
     if(tbody) tbody.innerHTML = '';
-    q.forEach(d => {
-        const b = d.data();
-        if(tbody) tbody.innerHTML += `<tr><td><img src="${b.img}" style="width:100px;"></td><td>${b.titulo}</td><td>${b.subtitulo}</td><td><i class="fas fa-trash" style="color:red; cursor:pointer;" onclick="window.delBanner('${d.id}')"></i></td></tr>`;
-    });
+    q.forEach(d => { const b = d.data(); if(tbody) tbody.innerHTML += `<tr><td><img src="${b.img}" style="width:100px;"></td><td>${b.titulo}</td><td>${b.subtitulo}</td><td><i class="fas fa-trash" style="color:red; cursor:pointer;" onclick="window.delBanner('${d.id}')"></i></td></tr>`; });
 }
 document.getElementById('btn-save-banner').addEventListener('click', async () => {
     const titulo = document.getElementById('banner-titulo').value;
@@ -355,10 +303,7 @@ async function renderizarCupons() {
     const tbody = document.getElementById('tabela-cupons');
     const q = await getDocs(cuponsCollection);
     if(tbody) tbody.innerHTML = '';
-    q.forEach(d => {
-        const c = d.data();
-        if(tbody) tbody.innerHTML += `<tr><td>${c.codigo}</td><td>${c.desconto}%</td><td>${c.validade || '-'}</td><td><i class="fas fa-trash" style="color:red; cursor:pointer;" onclick="window.delCupom('${d.id}')"></i></td></tr>`;
-    });
+    q.forEach(d => { const c = d.data(); if(tbody) tbody.innerHTML += `<tr><td>${c.codigo}</td><td>${c.desconto}%</td><td>${c.validade || '-'}</td><td><i class="fas fa-trash" style="color:red; cursor:pointer;" onclick="window.delCupom('${d.id}')"></i></td></tr>`; });
 }
 document.getElementById('btn-save-cupom').addEventListener('click', async () => {
     const codigo = document.getElementById('cupom-code').value.toUpperCase();
