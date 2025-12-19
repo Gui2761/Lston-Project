@@ -11,6 +11,22 @@ const reviewsCollection = collection(db, "reviews");
 let carrinho = JSON.parse(localStorage.getItem('lston_carrinho')) || []; 
 let favoritos = JSON.parse(localStorage.getItem('lston_favoritos')) || [];
 let currentUserEmail = null;
+let currentUserId = null;
+let desconto = 0;
+let freteValor = 0;
+
+// --- TABELA DE FRETE ---
+const TABELA_FRETE = {
+    'SE': { base: 10.00, adicional: 0.50, prazo: '1-2 dias' },
+    'BA': { base: 18.00, adicional: 1.00, prazo: '3-5 dias' },
+    'AL': { base: 18.00, adicional: 1.00, prazo: '3-5 dias' },
+    'PE': { base: 20.00, adicional: 1.00, prazo: '4-6 dias' },
+    'NORDESTE': { base: 22.00, adicional: 1.50, prazo: '5-8 dias' },
+    'SP': { base: 30.00, adicional: 2.00, prazo: '7-10 dias' },
+    'RJ': { base: 32.00, adicional: 2.00, prazo: '7-10 dias' },
+    'SUL': { base: 40.00, adicional: 3.00, prazo: '8-15 dias' },
+    'PADRAO': { base: 35.00, adicional: 5.00, prazo: '10-20 dias' }
+};
 
 // --- HELPERS ---
 window.showToast = (msg, type='success') => { if(typeof Toastify !== 'undefined') Toastify({ text: msg, duration: 3000, style: { background: type==='error'?"#e74c3c":"#2c3e50" } }).showToast(); else alert(msg); }
@@ -18,6 +34,16 @@ window.fmtMoney = (val) => { return new Intl.NumberFormat('pt-BR', { style: 'cur
 window.toggleLoading = (show) => { const el = document.getElementById('loading-overlay'); if(el) el.style.display = show ? 'flex' : 'none'; }
 window.mascaraCep = (el) => { el.value = el.value.replace(/\D/g, "").replace(/^(\d{5})(\d)/, "$1-$2"); };
 window.toggleMenu = () => { document.getElementById('nav-menu').classList.toggle('active'); }
+
+// Máscara de Telefone
+window.mascaraTel = (el) => {
+    let v = el.value.replace(/\D/g, "").substring(0, 11);
+    v = v.replace(/^(\d{2})(\d)/g, "($1) $2");
+    v = v.replace(/(\d)(\d{4})$/, "$1-$2");
+    el.value = v;
+}
+const checkoutTelInput = document.getElementById('check-tel');
+if(checkoutTelInput) { checkoutTelInput.addEventListener('input', function() { window.mascaraTel(this); }); }
 
 // TEMA
 const savedTheme = localStorage.getItem('lston_theme') || 'light';
@@ -31,7 +57,13 @@ window.toggleTheme = () => {
 }
 
 // AUTH
-onAuthStateChanged(auth, (user) => { if (user) { currentUserEmail = user.email; document.getElementById('user-name').innerText = user.email.split('@')[0]; } });
+onAuthStateChanged(auth, (user) => { 
+    if (user) { 
+        currentUserEmail = user.email; 
+        currentUserId = user.uid;
+        document.getElementById('user-name').innerText = user.email.split('@')[0]; 
+    } 
+});
 
 // --- FAVORITOS (MODAL) ---
 window.toggleFavoritosModal = () => {
@@ -187,14 +219,14 @@ function renderizarLayoutNovo(prod) {
 
                     <button class="btn-share" onclick="navigator.clipboard.writeText(window.location.href);window.showToast('Link copiado!')" style="margin-top:10px;">Compartilhar Link</button>
                     
-                    <div class="shipping-calc"><label style="font-size:14px; font-weight:bold; color:var(--text-color)">Calcular Frete:</label><div class="shipping-input-group"><input type="text" id="calc-cep" placeholder="CEP" maxlength="9" oninput="mascaraCep(this)"><button onclick="calcularFrete()">OK</button></div><div id="frete-res" style="margin-top:10px; font-size:14px; color:var(--text-color);"></div></div>
+                    <div class="shipping-calc"><label style="font-size:14px; font-weight:bold; color:var(--text-color)">Calcular Frete:</label><div class="shipping-input-group"><input type="text" id="calc-cep" placeholder="CEP" maxlength="9" oninput="mascaraCep(this)"><button onclick="calcularFretePagina()">OK</button></div><div id="frete-res" style="margin-top:10px; font-size:14px; color:var(--text-color);"></div></div>
                 </div>
             </div>
         </div>`;
     if(est > 0) document.getElementById('btn-add-cart').addEventListener('click', () => adicionarComQtdPagina(prod, imagens[0]));
 }
 
-// --- FUNÇÕES DE CARRINHO ---
+// --- FUNÇÕES DE CARRINHO E CHECKOUT ---
 window.trocarImagem = function(url, elemento) { document.getElementById('main-img-display').src = url; document.querySelectorAll('.thumb-box').forEach(el => el.style.border = '2px solid #eee'); if(elemento) elemento.style.border = '2px solid #2c3e50'; }
 window.alterarQtdDetail = (delta) => { const input = document.getElementById('detail-qty'); let val = parseInt(input.value) + delta; if(val < 1) val = 1; input.value = val; }
 
@@ -216,19 +248,27 @@ function atualizarCarrinhoUI() {
     const lista = document.getElementById('itens-carrinho');
     if(!lista) return;
     let subtotal = 0; lista.innerHTML = '';
-    if(carrinho.length === 0) lista.innerHTML = '<p style="text-align:center; padding:20px; color:#999;">Vazio.</p>';
+    if(carrinho.length === 0) { lista.innerHTML = '<p style="text-align:center; padding:20px; color:#999;">Vazio.</p>'; if(document.getElementById('cart-total')) document.getElementById('cart-total').innerHTML = "R$ 0,00"; return; }
+    
     carrinho.forEach((item, index) => {
         subtotal += parseFloat(item.preco) * item.qtd;
         lista.innerHTML += `<div class="cart-item"><div style="display:flex;align-items:center;"><img src="${item.img}"><div class="item-info"><strong>${item.nome}</strong><br>${window.fmtMoney(item.preco)}<div class="cart-qty-control"><button class="cart-qty-btn" onclick="alterarQtdCarrinho(${index}, -1)">-</button><span class="cart-qty-val">${item.qtd}</span><button class="cart-qty-btn" onclick="alterarQtdCarrinho(${index}, 1)">+</button></div></div></div><i class="fas fa-trash item-remove" onclick="window.removerDoCarrinho(${index})"></i></div>`;
     });
-    if(document.getElementById('cart-total')) document.getElementById('cart-total').innerHTML = window.fmtMoney(subtotal);
+
+    let total = subtotal - (subtotal * desconto); 
+    total += freteValor;
+    
+    let textoTotal = `Total: ${window.fmtMoney(total)}`;
+    if(freteValor > 0) textoTotal += ` <br><small>(c/ frete)</small>`;
+    if(desconto > 0) textoTotal += ` <br><small style="color:var(--green-color);">(-${desconto*100}% cupom)</small>`;
+
+    if(document.getElementById('cart-total')) document.getElementById('cart-total').innerHTML = textoTotal;
 }
 
-// Funções de Gestão do Modal de Carrinho
 window.alterarQtdCarrinho = (index, delta) => {
     const item = carrinho[index];
     const estoque = parseInt(item.estoque) || 0;
-    if (delta > 0 && item.qtd + delta > estoque) { window.showToast("Limite de estoque!", "error"); return; }
+    if (delta > 0 && item.qtd + delta > estoque) { window.showToast("Limite!", "error"); return; }
     item.qtd += delta;
     if(item.qtd < 1) carrinho.splice(index, 1);
     localStorage.setItem('lston_carrinho', JSON.stringify(carrinho));
@@ -241,14 +281,157 @@ window.toggleCarrinho = () => {
     atualizarCarrinhoUI(); 
 }
 
-// Checkout Simplificado
-window.irParaCheckout = () => { window.location.href = "index.html"; } 
-window.voltarParaCarrinho = () => { document.getElementById('carrinho-modal').style.display='none'; } 
-window.aplicarCupom = async () => { window.showToast("Use os cupons na página inicial.", "info"); }
-window.confirmarPedido = async () => { window.location.href = "index.html"; }
+// --- FUNÇÕES DE CHECKOUT INTEGRADAS ---
+window.irParaCheckout = async () => { 
+    document.getElementById('etapa-carrinho').style.display='none'; 
+    document.getElementById('etapa-checkout').style.display='flex'; 
+    if(currentUserId) {
+        try {
+            const docRef = doc(db, "users", currentUserId);
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+                const dados = docSnap.data();
+                if(dados.nome) document.getElementById('check-nome').value = dados.nome;
+                if(dados.telefone) { const tf = document.getElementById('check-tel'); tf.value = dados.telefone; window.mascaraTel(tf); }
+                if(dados.cep) document.getElementById('check-cep').value = dados.cep;
+                if(dados.endereco) document.getElementById('check-endereco').value = `${dados.endereco}, ${dados.numero || ''} - ${dados.bairro || ''}`;
+                if(dados.cidade) document.getElementById('check-cidade').value = dados.cidade;
+            }
+        } catch(e) {}
+    }
+}
+window.voltarParaCarrinho = () => { document.getElementById('etapa-checkout').style.display='none'; document.getElementById('etapa-carrinho').style.display='block'; }
 
-// Frete da Página
-window.calcularFrete = async () => { 
+window.buscarCep = async () => { 
+    const cep = document.getElementById('check-cep').value.replace(/\D/g, ''); 
+    if(cep.length !== 8) return window.showToast("CEP inválido"); 
+    window.toggleLoading(true); 
+    try { 
+        const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`); 
+        const data = await res.json(); 
+        if(!data.erro) { document.getElementById('check-endereco').value = `${data.logradouro}, ${data.bairro}`; document.getElementById('check-cidade').value = `${data.localidade}/${data.uf}`; window.showToast("Encontrado!"); } 
+    } catch(e) {} finally { window.toggleLoading(false); } 
+}
+
+window.calcularFreteCarrinho = async () => {
+    const cepEl = document.getElementById('cart-cep-input');
+    const resultDiv = document.getElementById('cart-frete-result');
+    if(!cepEl) return;
+    const cep = cepEl.value.replace(/\D/g, '');
+    if (cep.length !== 8) { resultDiv.innerText = "CEP inválido."; return; }
+    resultDiv.innerText = "Calculando..."; window.toggleLoading(true);
+    try {
+        const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+        const data = await res.json();
+        if(data.erro) { resultDiv.innerText = "CEP não encontrado."; } 
+        else {
+            const uf = data.uf;
+            let regra = TABELA_FRETE[uf];
+            if(!regra) { if(['PR','SC','RS'].includes(uf)) regra = TABELA_FRETE['SUL']; else if(['MA','CE','RN','PB','PI'].includes(uf)) regra = TABELA_FRETE['NORDESTE']; else regra = TABELA_FRETE['PADRAO']; }
+            const qtd = carrinho.reduce((acc, i) => acc + i.qtd, 0);
+            freteValor = regra.base + (regra.adicional * Math.max(0, qtd-1));
+            resultDiv.innerHTML = `Frete ${uf}: ${window.fmtMoney(freteValor)} <small>(${regra.prazo})</small>`;
+            localStorage.setItem('lston_cep', cep);
+            atualizarCarrinhoUI();
+        }
+    } catch(e){ resultDiv.innerText = "Erro."; } finally { window.toggleLoading(false); }
+}
+
+// Cupom Real
+window.aplicarCupom = async () => {
+    const input = document.getElementById('cupom-input');
+    const codigoDigitado = input.value.trim().toUpperCase();
+    if(!codigoDigitado) return window.showToast("Digite um código!", "error");
+    window.toggleLoading(true);
+    try {
+        const q = query(collection(db, "cupons"), where("codigo", "==", codigoDigitado));
+        const querySnapshot = await getDocs(q);
+        if (querySnapshot.empty) { window.toggleLoading(false); return window.showToast("Cupom inválido.", "error"); }
+        let cupomValido = null;
+        querySnapshot.forEach(doc => { cupomValido = doc.data(); });
+        if(cupomValido.validade) {
+            const hoje = new Date();
+            const validade = new Date(cupomValido.validade);
+            validade.setHours(23, 59, 59);
+            if(hoje > validade) { window.toggleLoading(false); return window.showToast("Este cupom venceu!", "error"); }
+        }
+        const percentual = parseFloat(cupomValido.desconto);
+        if(percentual > 0) {
+            desconto = percentual / 100;
+            window.showToast(`Desconto de ${percentual}% aplicado!`, "success");
+            input.disabled = true; input.style.borderColor = "green"; input.value += " (Aplicado)";
+            atualizarCarrinhoUI();
+        }
+    } catch (e) { window.showToast("Erro ao validar cupom.", "error"); } finally { window.toggleLoading(false); }
+}
+
+// Confirmar Pedido
+window.confirmarPedido = async () => {
+    const nome = document.getElementById('check-nome').value;
+    const telefone = document.getElementById('check-tel').value;
+    const endereco = document.getElementById('check-endereco').value;
+    const cidade = document.getElementById('check-cidade').value;
+    const cep = document.getElementById('check-cep').value;
+    const pagamento = document.getElementById('check-pagamento').value;
+
+    if(!nome || !endereco || !telefone) return window.showToast("Preencha Nome, Endereço e Telefone!", "error");
+    const telLimpo = telefone.replace(/\D/g, '');
+    if (telLimpo.length < 10 || telLimpo.length > 11) return window.showToast("Telefone inválido!", "error");
+    
+    let subtotal = 0; carrinho.forEach(i => subtotal += parseFloat(i.preco) * i.qtd);
+    const totalFinal = (subtotal - (subtotal * desconto)) + freteValor;
+    const resumoHtml = carrinho.map(i => `<li style="margin-bottom:5px;">${i.qtd}x ${i.nome} - <b>${window.fmtMoney(i.preco)}</b></li>`).join('');
+    
+    // Fecha o modal antes do alerta
+    document.getElementById('carrinho-modal').style.display = 'none';
+
+    const confirmacao = await Swal.fire({
+        title: 'Confirmar Pedido?',
+        html: `<div style="text-align:left;font-size:14px;"><p><strong>Cliente:</strong> ${nome}</p><p><strong>Tel:</strong> ${telefone}</p><p><strong>End:</strong> ${endereco}</p><hr><ul style="list-style:none;padding:0;">${resumoHtml}</ul><hr><p style="text-align:right;">Total: <strong>${window.fmtMoney(totalFinal)}</strong></p></div>`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#8bc34a',
+        cancelButtonColor: '#d33',
+        confirmButtonText: '✅ Confirmar'
+    });
+
+    if (!confirmacao.isConfirmed) return;
+
+    window.toggleLoading(true);
+    try {
+        for (const item of carrinho) { 
+            const prodSnap = await getDoc(doc(db, "produtos", item.id));
+            if (!prodSnap.exists()) throw new Error(`Produto removido: ${item.nome}`);
+            if (parseInt(prodSnap.data().estoque) < item.qtd) throw new Error(`Estoque insuficiente: ${item.nome}`);
+        }
+        
+        const docRef = await addDoc(collection(db, "pedidos"), { 
+            cliente: nome, telefone, endereco, cidade, cep, pagamento, itens: carrinho, 
+            total: totalFinal, frete: freteValor, descontoAplicado: desconto, data: new Date().toISOString(), 
+            status: "Recebido", userEmail: currentUserEmail 
+        });
+        
+        for (const item of carrinho) { 
+            const ref = doc(db, "produtos", item.id);
+            const snap = await getDoc(ref);
+            const nv = (parseInt(snap.data().estoque) || 0) - item.qtd; 
+            await updateDoc(ref, { estoque: nv });
+        }
+        
+        carrinho=[]; 
+        localStorage.setItem('lston_carrinho', '[]'); 
+        atualizarCarrinhoUI(); 
+        
+        window.location.href = `sucesso.html?id=${docRef.id}&method=${pagamento}`;
+
+    } catch(e) { 
+        window.toggleLoading(false);
+        Swal.fire('Erro', e.message || "Erro desconhecido.", 'error');
+    }
+}
+
+// Frete da Página (Simples)
+window.calcularFretePagina = async () => { 
     const cep = document.getElementById('calc-cep').value.replace(/\D/g,''); 
     const res = document.getElementById('frete-res'); 
     if(cep.length !== 8) { res.innerText="CEP inválido"; return; }

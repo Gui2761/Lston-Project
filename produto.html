@@ -8,7 +8,14 @@
     <link rel="stylesheet" href="css/global.css">
     <link rel="stylesheet" href="css/produto.css">
     <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script type="importmap"> { "imports": { "firebase/app": "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js", "firebase/auth": "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js", "firebase/firestore": "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js", "firebase/storage": "https://www.gstatic.com/firebasejs/10.13.0/firebase-storage.js" } } </script>
+    <style>
+        .cart-shipping-calc { background: var(--bg-secondary); padding: 10px; border-radius: 6px; margin-bottom: 15px; border: 1px solid var(--border-color); }
+        .cart-shipping-row { display: flex; gap: 8px; margin-top: 5px; }
+        .cart-shipping-row input { flex: 1; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; }
+        .cart-shipping-row button { padding: 8px 12px; background: var(--text-color); color: var(--bg-color); border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+    </style>
 </head>
 <body>
     <div id="loading-overlay"><div class="spinner"></div></div>
@@ -56,14 +63,41 @@
     <div id="carrinho-modal" class="cart-modal-overlay">
         <div class="cart-modal">
             <div class="cart-header"><h3>Carrinho</h3><i class="fas fa-times close-cart-icon" onclick="toggleCarrinho()"></i></div>
+            
             <div id="etapa-carrinho">
                 <div id="itens-carrinho" class="cart-items"></div>
+                
+                <div class="cart-shipping-calc">
+                    <label style="font-size:13px; font-weight:bold; color:var(--text-color);">Calcular Frete:</label>
+                    <div class="cart-shipping-row">
+                        <input type="text" id="cart-cep-input" placeholder="Seu CEP" maxlength="9" oninput="mascaraCep(this)">
+                        <button onclick="calcularFreteCarrinho()">OK</button>
+                    </div>
+                    <div id="cart-frete-result" style="font-size:13px; margin-top:5px; font-weight:500;"></div>
+                </div>
+
                 <div class="coupon-area"><input type="text" id="cupom-input" placeholder="Cupom"><button onclick="aplicarCupom()">Aplicar</button></div>
-                <div class="cart-footer"><div class="total-price">Total: <span id="cart-total">R$ 0,00</span></div><button class="btn-checkout" onclick="irParaCheckout()">Continuar Compra</button></div>
+                <div class="cart-footer"><div class="total-price">Total: <span id="cart-total">R$ 0,00</span></div><button class="btn-checkout" onclick="irParaCheckout()">Continuar</button></div>
             </div>
+
             <div id="etapa-checkout" class="checkout-form" style="display: none; flex-direction: column; height: 100%;">
                 <div style="flex:1; overflow-y:auto;">
+                    <p>Entrega:</p>
+                    <div class="input-row">
+                        <input type="text" id="check-cep" placeholder="CEP" oninput="mascaraCep(this)" onblur="buscarCep()" maxlength="9">
+                        <button onclick="buscarCep()" class="btn-checkout-secondary" style="height:45px;">Busca</button>
                     </div>
+                    <input type="text" id="check-endereco" placeholder="Endereço (Rua, Nº, Bairro)">
+                    <input type="text" id="check-cidade" placeholder="Cidade/UF">
+                    
+                    <p>Dados Pessoais:</p>
+                    <input type="text" id="check-nome" placeholder="Seu Nome Completo">
+                    <input type="text" id="check-tel" placeholder="Telefone (WhatsApp)">
+                    
+                    <p>Pagamento:</p>
+                    <select id="check-pagamento"><option value="Pix">Pix</option><option value="Cartão">Cartão de Crédito</option><option value="Boleto">Boleto Bancário</option></select>
+                </div>
+                <div class="cart-footer"><button class="btn-checkout" onclick="confirmarPedido()">Finalizar Pedido</button><button class="btn-back-cart" onclick="voltarParaCarrinho()">Voltar</button></div>
             </div>
         </div>
     </div>
