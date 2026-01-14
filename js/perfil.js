@@ -1,8 +1,8 @@
-import { db, auth } from "./firebaseConfig.js";
-import { collection, query, where, getDocs, doc, getDoc, setDoc } from "firebase/firestore";
+// js/perfil.js (Completo - Dados via PostgreSQL)
+import { auth } from "./firebaseConfig.js";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 
-// --- TEMA ---
+// --- TEMA E HELPERS ---
 const savedTheme = localStorage.getItem('lston_theme') || 'light';
 document.body.setAttribute('data-theme', savedTheme);
 if(document.getElementById('theme-toggle')) document.getElementById('theme-toggle').className = savedTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
@@ -15,7 +15,6 @@ window.toggleTheme = () => {
     document.getElementById('theme-toggle').className = newTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
 }
 
-// Helpers
 window.mascaraCep = (el) => { el.value = el.value.replace(/\D/g, "").replace(/^(\d{5})(\d)/, "$1-$2"); };
 function showToast(msg, type='success') { if(typeof Toastify !== 'undefined') Toastify({ text: msg, duration: 3000, style: { background: type==='error'?"#e74c3c":"#2c3e50" } }).showToast(); }
 function fmtMoney(val) { return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val); }
@@ -23,26 +22,40 @@ function fmtMoney(val) { return new Intl.NumberFormat('pt-BR', { style: 'currenc
 const pedidosList = document.getElementById('lista-meus-pedidos');
 let currentUserId = null;
 
-// --- AUTH E INICIALIZAÇÃO ---
-onAuthStateChanged(auth, async (user) => {
-    if (!user) { window.location.href = "login.html"; return; }
-    currentUserId = user.uid;
+// --- AUTH & INICIALIZAÇÃO ---
+// Verifica se tem sessão do Node.js (preferencial) ou do Firebase
+function checkSession() {
+    const localUser = localStorage.getItem('lston_user');
+    if (localUser) {
+        const u = JSON.parse(localUser);
+        initProfile(u);
+    } else {
+        // Fallback: Tenta Firebase Auth se não tiver localUser (migração suave)
+        onAuthStateChanged(auth, (user) => {
+            if (!user) { window.location.href = "login.html"; return; }
+            initProfile({ id: user.uid, nome: user.displayName || user.email, email: user.email });
+        });
+    }
+}
+
+function initProfile(user) {
+    currentUserId = user.id;
     if(document.getElementById('user-email-display')) {
-        document.getElementById('user-email-display').innerText = user.displayName || user.email;
+        document.getElementById('user-email-display').innerText = user.nome;
     }
     
-    // Carrega dados e pedidos
-    carregarDadosPerfil(user.uid);
-    carregarPedidos(user.email);
-});
+    // Busca dados detalhados do servidor (endereco atualizado)
+    carregarDadosPerfil(user.id);
+    carregarPedidos(user.id);
+}
 
-// --- DADOS PESSOAIS ---
+// --- CARREGAR DADOS DO USUÁRIO ---
 async function carregarDadosPerfil(uid) {
     try {
-        const docRef = doc(db, "users", uid);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-            const data = docSnap.data();
+        const res = await fetch(`http://127.0.0.1:3000/users/${uid}`);
+        if(res.ok) {
+            const data = await res.json();
+            // Preenche o formulário
             if(document.getElementById('perfil-nome')) document.getElementById('perfil-nome').value = data.nome || '';
             if(document.getElementById('perfil-tel')) document.getElementById('perfil-tel').value = data.telefone || '';
             if(document.getElementById('perfil-cep')) document.getElementById('perfil-cep').value = data.cep || '';
@@ -67,37 +80,38 @@ window.salvarDadosPerfil = async () => {
     };
 
     try {
-        await setDoc(doc(db, "users", currentUserId), dados, { merge: true });
-        showToast("Dados atualizados com sucesso!");
+        const res = await fetch(`http://127.0.0.1:3000/users/${currentUserId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(dados)
+        });
+        
+        if(res.ok) showToast("Dados atualizados com sucesso!");
+        else showToast("Erro ao salvar.", "error");
+        
     } catch (e) {
         console.error(e);
-        showToast("Erro ao salvar dados.", "error");
+        showToast("Erro de conexão.", "error");
     }
 }
 
-// --- PEDIDOS (COM TIMELINE VISUAL) ---
-async function carregarPedidos(email) {
+// --- HISTÓRICO DE PEDIDOS (TIMELINE) ---
+async function carregarPedidos(uid) {
     try {
-        const q = query(collection(db, "pedidos"), where("userEmail", "==", email));
-        const querySnapshot = await getDocs(q);
+        const res = await fetch(`http://127.0.0.1:3000/orders/user/${uid}`);
+        const pedidos = await res.json();
 
         pedidosList.innerHTML = '';
-        if (querySnapshot.empty) { 
+        if (pedidos.length === 0) { 
             pedidosList.innerHTML = '<div style="text-align:center; padding:40px; color:var(--text-muted);"><i class="fas fa-shopping-bag" style="font-size:40px; margin-bottom:10px; opacity:0.5;"></i><p>Você ainda não fez nenhum pedido.</p></div>'; 
             return; 
         }
 
-        const pedidos = [];
-        querySnapshot.forEach(doc => pedidos.push({id: doc.id, ...doc.data()}));
-        
-        // Ordena do mais recente para o mais antigo
-        pedidos.sort((a,b) => new Date(b.data) - new Date(a.data));
-
         pedidos.forEach((p) => {
             const data = p.data ? new Date(p.data).toLocaleDateString('pt-BR') : '-';
-            const idCurto = p.id.slice(0, 8).toUpperCase();
+            const idCurto = String(p.id).slice(0, 8).toUpperCase();
             
-            // --- Lógica da Timeline ---
+            // Lógica da Timeline
             const statusSteps = ['Recebido', 'Enviado', 'Entregue'];
             const statusAtual = p.status || 'Recebido';
             
@@ -125,9 +139,10 @@ async function carregarPedidos(email) {
             let itensHtml = '';
             if(p.itens) {
                 p.itens.forEach(item => {
+                    const img = item.img || (item.imagens && item.imagens[0]) || '';
                     itensHtml += `
                         <div class="order-item">
-                            <img src="${item.img}" style="width:50px; height:50px; object-fit:cover; border-radius:6px; border:1px solid var(--border-color);">
+                            <img src="${img}" style="width:50px; height:50px; object-fit:cover; border-radius:6px; border:1px solid var(--border-color);">
                             <div>
                                 <div style="font-weight:600;">${item.nome}</div>
                                 <div style="font-size:12px; color:var(--text-muted);">${item.qtd}x ${fmtMoney(item.preco)}</div>
@@ -157,15 +172,12 @@ async function carregarPedidos(email) {
                 
                 <div class="order-details">
                     ${timelineHtml}
-                    
                     <div style="background:var(--bg-secondary); padding:15px; border-radius:8px; margin: 15px 0;">
                         <p style="font-size:13px; margin-bottom:5px; color:var(--text-muted);">Endereço de Entrega:</p>
-                        <p style="font-weight:600; font-size:14px;">${p.endereco}, ${p.numero||''} - ${p.bairro||''}</p>
-                        <p style="font-size:13px;">${p.cidade} - ${p.cep}</p>
+                        <p style="font-weight:600; font-size:14px;">${p.endereco || ''}, ${p.numero||''} - ${p.bairro||''}</p>
+                        <p style="font-size:13px;">${p.cidade || ''} - ${p.cep || ''}</p>
                     </div>
-
                     ${itensHtml}
-                    
                     <div class="order-total">
                         <span>Frete: ${fmtMoney(p.frete||0)}</span>
                         <span style="font-size:18px; margin-left:15px;">Total: ${fmtMoney(p.total)}</span>
@@ -177,15 +189,14 @@ async function carregarPedidos(email) {
     } catch (error) { console.error(error); }
 }
 
-// --- BOTÃO SAIR (Restaurado) ---
 const btnLogout = document.getElementById('btn-logout-client');
 if(btnLogout) {
     btnLogout.addEventListener('click', async () => {
-        try {
-            await signOut(auth);
-            window.location.href = "login.html";
-        } catch(e) {
-            console.error("Erro ao sair:", e);
-        }
+        localStorage.removeItem('lston_user');
+        localStorage.removeItem('lston_token');
+        await signOut(auth); // Desloga do Firebase também só pra garantir
+        window.location.href = "login.html";
     });
 }
+
+checkSession();

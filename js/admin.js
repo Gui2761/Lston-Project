@@ -1,16 +1,10 @@
-import { db, auth, storage } from "./firebaseConfig.js";
-import { collection, addDoc, getDocs, getDoc, deleteDoc, updateDoc, doc, query, orderBy } from "firebase/firestore";
-import { onAuthStateChanged, signOut } from "firebase/auth";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+// js/admin.js (Híbrido: Node.js para dados, Firebase para Storage)
+import { app } from "./firebaseConfig.js";
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+
+const storage = getStorage(app);
 
 // --- VARIÁVEIS GLOBAIS ---
-const produtosCollection = collection(db, "produtos");
-const pedidosCollection = collection(db, "pedidos");
-const bannersCollection = collection(db, "banners");
-const cuponsCollection = collection(db, "cupons");
-const categoriasCollection = collection(db, "categorias");
-const usersCollection = collection(db, "users");
-
 let chartCat = null;
 let chartFat = null;
 let todosPedidosCache = [];
@@ -23,68 +17,52 @@ let filesToUpload = [];
 let paginaAtual = 1;
 const itensPorPagina = 20;
 
-// --- 1. INICIALIZAÇÃO ---
-try {
-    const savedTheme = localStorage.getItem('lston_theme') || 'light';
-    document.body.setAttribute('data-theme', savedTheme);
-    const themeToggle = document.getElementById('theme-toggle-admin');
-    if(themeToggle) themeToggle.className = savedTheme === 'dark' ? 'fas fa-sun theme-toggle-admin' : 'fas fa-moon theme-toggle-admin';
-} catch(e) {}
-
-window.toggleThemeAdmin = () => {
-    const body = document.body;
-    const newTheme = body.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-    body.setAttribute('data-theme', newTheme);
-    localStorage.setItem('lston_theme', newTheme);
-    const toggle = document.getElementById('theme-toggle-admin');
-    if(toggle) toggle.className = newTheme === 'dark' ? 'fas fa-sun theme-toggle-admin' : 'fas fa-moon theme-toggle-admin';
-}
-
-// --- 2. AUTH ---
-onAuthStateChanged(auth, async (user) => { 
-    if(!user) { 
-        window.location.href="login.html"; 
-    } else if (user.email !== "admin@lston.com") { 
+// --- 1. INICIALIZAÇÃO E AUTH ---
+function checkAuth() {
+    const userStr = localStorage.getItem('lston_user');
+    if(!userStr) {
+        window.location.href="login.html";
+        return;
+    }
+    const user = JSON.parse(userStr);
+    
+    // Verificação de segurança no front
+    if (!user.is_admin) { 
         alert("Acesso restrito."); 
-        await signOut(auth);
         window.location.href = "index.html"; 
-    } else { 
+    } else {
         console.log("Admin logado.");
         initDragAndDrop();
         
-        await renderizarCategorias(); 
-        await renderizarDashboard(); 
-        renderizarTabela();          
-        renderizarBanners();
-        renderizarCupons();
-        renderizarClientes(); // Carrega clientes
-        
+        // Inicia carregamento
+        carregarTudo();
         ativarListenersFiltros();
-    } 
-});
+    }
+}
 
-// --- 3. DASHBOARD ---
+async function carregarTudo() {
+    await renderizarCategorias(); 
+    await renderizarDashboard(); // Carrega pedidos e gráficos
+    renderizarTabela();          // Carrega produtos
+    // Banners e Cupons: Você pode criar tabelas para eles no banco depois
+    // Por enquanto deixo placeholders ou comentados para não dar erro
+}
+
+// --- 3. DASHBOARD E PEDIDOS (Conectado ao Node.js) ---
 async function renderizarDashboard() {
     try {
         const filtroData = document.getElementById('filtro-data-dashboard')?.value || 'total';
         
-        // Cache de Pedidos
-        if(todosPedidosCache.length === 0) {
-            const q = await getDocs(pedidosCollection);
-            todosPedidosCache = [];
-            q.forEach(d => { const p = d.data(); p.id = d.id; todosPedidosCache.push(p); });
-            todosPedidosCache.sort((a,b) => new Date(b.data) - new Date(a.data));
-        }
-
-        // Busca Visitas (Stats)
-        try {
-            const statsSnap = await getDoc(doc(db, "stats", "geral"));
-            if(statsSnap.exists()) {
-                const totalVisitas = statsSnap.data().visitas || 0;
-                const kpiVisitas = document.getElementById('kpi-visitas');
-                if(kpiVisitas) kpiVisitas.innerText = totalVisitas;
-            }
-        } catch(e) { console.warn("Erro ao ler visitas"); }
+        // BUSCA DO NODE.JS
+        const res = await fetch('http://127.0.0.1:3000/admin/orders');
+        todosPedidosCache = await res.json();
+        
+        // Conversão de ID para string para facilitar busca
+        todosPedidosCache = todosPedidosCache.map(p => ({
+            ...p, 
+            id: String(p.id),
+            data: p.data // O backend já manda como 'data' no formato Date string
+        }));
 
         let cats = {}, dias = {}, totalFat = 0, totalVendas = 0;
         const hoje = new Date().toLocaleDateString('pt-BR');
@@ -123,7 +101,7 @@ async function renderizarDashboard() {
 }
 window.renderizarDashboard = renderizarDashboard;
 
-// --- 4. PEDIDOS ---
+// --- FILTROS DE PEDIDOS ---
 function ativarListenersFiltros() {
     const filtroStatusEl = document.getElementById('filtro-status');
     if(filtroStatusEl) {
@@ -148,10 +126,9 @@ window.filtrarPedidos = () => {
         }
         const matchStatus = filtroStatus === 'Todos' || (p.status || 'Recebido') === filtroStatus;
         const pNome = normalizarTexto(p.cliente);
-        const pEmail = normalizarTexto(p.userEmail);
         const pId = (p.id || '').toString(); 
         const matchId = pId.toLowerCase().includes(termoOriginal.toLowerCase());
-        const matchTexto = pNome.includes(termoNormalizado) || pEmail.includes(termoNormalizado);
+        const matchTexto = pNome.includes(termoNormalizado);
         
         return matchStatus && (matchId || matchTexto);
     });
@@ -182,7 +159,9 @@ function renderizarTabelaPedidos() {
     const totalPaginas = Math.ceil(pedidosFiltrados.length / itensPorPagina);
 
     tbody.innerHTML = itensPagina.map(p => {
-        const idCurto = p.id ? p.id.slice(0, 8).toUpperCase() : '???';
+        // ID no PostgreSQL é número, converte pra string pra slice
+        const idStr = String(p.id);
+        const idCurto = idStr.length > 8 ? idStr.slice(0, 8) : idStr;
         const data = p.data ? new Date(p.data).toLocaleDateString('pt-BR') : '-';
         const statusAtual = p.status || 'Recebido';
         let corStatus = '#333';
@@ -194,7 +173,7 @@ function renderizarTabelaPedidos() {
         return `
         <tr>
             <td><span title="${p.id}" style="cursor:help"><strong>#${idCurto}</strong></span><br><small style="color:#888">${data}</small></td>
-            <td><div style="font-weight:600;">${p.cliente || 'Desconhecido'}</div><div style="font-size:11px; color:#888;">${p.userEmail || ''}</div></td>
+            <td><div style="font-weight:600;">${p.cliente || 'Desconhecido'}</div></td>
             <td style="font-weight:bold;">${fmtMoney(p.total || 0)}</td>
             <td>
                 <select onchange="window.updateStatus('${p.id}', this.value)" style="padding:5px 10px; border-radius:15px; border:1px solid ${corStatus}; color:${corStatus}; font-weight:600; cursor:pointer; background:transparent;">
@@ -214,14 +193,14 @@ function renderizarTabelaPedidos() {
 }
 
 window.verDetalhes = (id) => {
-    const p = todosPedidosCache.find(x => x.id === id);
+    const p = todosPedidosCache.find(x => String(x.id) === String(id));
     if(!p) return;
     const conteudo = document.getElementById('conteudo-detalhes');
     if(conteudo) {
         const itensHtml = (p.itens || []).map(i => `<li>${i.qtd}x ${i.nome} - ${fmtMoney(i.preco)}</li>`).join('');
         conteudo.innerHTML = `
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                <h4 style="margin:0;">Info do Pedido</h4>
+                <h4 style="margin:0;">Info do Pedido #${p.id}</h4>
                 <button onclick="window.imprimirPedido('${p.id}')" style="background:#2c3e50; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:13px;"><i class="fas fa-print"></i> Imprimir</button>
             </div>
             <p><strong>Cliente:</strong> ${p.cliente}</p>
@@ -238,10 +217,10 @@ window.verDetalhes = (id) => {
 }
 
 window.imprimirPedido = (id) => {
-    const p = todosPedidosCache.find(x => x.id === id);
+    const p = todosPedidosCache.find(x => String(x.id) === String(id));
     if(!p) return;
     const itensHtml = (p.itens || []).map(i => `<tr><td style="padding:5px; border-bottom:1px solid #eee;">${i.nome}</td><td style="padding:5px; border-bottom:1px solid #eee; text-align:center;">${i.qtd}</td><td style="padding:5px; border-bottom:1px solid #eee; text-align:right;">${fmtMoney(i.preco)}</td></tr>`).join('');
-    const conteudoImpressao = `<html><head><title>Pedido #${id.slice(0,8)}</title><style>body { font-family: monospace; padding: 20px; max-width: 80mm; margin: 0 auto; } h2 { text-align: center; border-bottom: 2px dashed #000; padding-bottom: 10px; margin: 0 0 10px 0; } table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; } .info { margin-bottom: 10px; font-size: 12px; line-height: 1.4; } .total { text-align: right; font-size: 16px; font-weight: bold; margin-top: 15px; border-top: 2px dashed #000; padding-top: 10px; }</style></head><body><h2>L&stON - Pedido</h2><div class="info"><strong>Data:</strong> ${new Date(p.data).toLocaleDateString()}<br><strong>Cliente:</strong> ${p.cliente}<br><strong>Tel:</strong> ${p.telefone}<br><strong>Endereço:</strong><br>${p.endereco}, ${p.numero || ''}<br>${p.bairro || ''} - ${p.cidade || ''}<br>CEP: ${p.cep || ''}</div><table><thead><tr style="text-align:left;"><th>Item</th><th style="text-align:center;">Qtd</th><th style="text-align:right;">$</th></tr></thead><tbody>${itensHtml}</tbody></table><div class="total">Total: ${fmtMoney(p.total)}</div><p style="text-align:center; font-size:10px; margin-top:20px;">Obrigado pela preferência!</p><script>window.print(); window.onafterprint = function(){ window.close(); }</script></body></html>`;
+    const conteudoImpressao = `<html><head><title>Pedido #${id}</title><style>body { font-family: monospace; padding: 20px; max-width: 80mm; margin: 0 auto; } h2 { text-align: center; border-bottom: 2px dashed #000; padding-bottom: 10px; margin: 0 0 10px 0; } table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; } .info { margin-bottom: 10px; font-size: 12px; line-height: 1.4; } .total { text-align: right; font-size: 16px; font-weight: bold; margin-top: 15px; border-top: 2px dashed #000; padding-top: 10px; }</style></head><body><h2>L&stON - Pedido</h2><div class="info"><strong>Data:</strong> ${new Date(p.data).toLocaleDateString()}<br><strong>Cliente:</strong> ${p.cliente}<br><strong>Tel:</strong> ${p.telefone}<br><strong>Endereço:</strong><br>${p.endereco}, ${p.numero || ''}<br>${p.bairro || ''} - ${p.cidade || ''}<br>CEP: ${p.cep || ''}</div><table><thead><tr style="text-align:left;"><th>Item</th><th style="text-align:center;">Qtd</th><th style="text-align:right;">$</th></tr></thead><tbody>${itensHtml}</tbody></table><div class="total">Total: ${fmtMoney(p.total)}</div><p style="text-align:center; font-size:10px; margin-top:20px;">Obrigado pela preferência!</p><script>window.print(); window.onafterprint = function(){ window.close(); }</script></body></html>`;
     const janela = window.open('', '', 'height=600,width=400');
     janela.document.write(conteudoImpressao);
     janela.document.close();
@@ -249,10 +228,16 @@ window.imprimirPedido = (id) => {
 
 window.updateStatus = async (id, novoStatus) => {
     try {
-        await updateDoc(doc(db, "pedidos", id), { status: novoStatus });
-        const item = todosPedidosCache.find(x => x.id === id);
+        await fetch(`http://127.0.0.1:3000/admin/orders/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: novoStatus })
+        });
+        
+        const item = todosPedidosCache.find(x => String(x.id) === String(id));
         if(item) item.status = novoStatus;
         showToast("Status atualizado!");
+        filtrarPedidos();
     } catch(e) { showToast("Erro ao atualizar.", "error"); }
 }
 
@@ -265,49 +250,26 @@ window.exportarPedidos = () => {
     a.click();
 }
 
-// --- 5. CLIENTES ---
+// --- 5. CLIENTES (Sem backend ainda, mantido vazio ou mock) ---
 async function renderizarClientes() {
+    // Implementar rota /users no backend futuramente para listar todos
     const tbody = document.getElementById('tabela-clientes');
-    const countEl = document.getElementById('total-clientes-count');
-    if(!tbody) return;
-
-    try {
-        const q = await getDocs(usersCollection);
-        let html = '';
-        let total = 0;
-
-        q.forEach(doc => {
-            const u = doc.data();
-            total++;
-            const dataCad = u.dataCadastro ? new Date(u.dataCadastro).toLocaleDateString('pt-BR') : '-';
-            let zapBtn = '';
-            if(u.telefone) {
-                const num = u.telefone.replace(/\D/g, '');
-                if(num.length >= 10) {
-                    zapBtn = `<a href="https://wa.me/55${num}" target="_blank" style="color:#25D366; margin-left:5px;"><i class="fab fa-whatsapp"></i></a>`;
-                }
-            }
-
-            html += `<tr><td><strong>${u.nome || 'Sem Nome'}</strong><br><small style="color:#888">${u.email}</small></td><td>${u.telefone || '-'} ${zapBtn}</td><td>${u.cidade || '-'} / ${u.cep || '-'}</td><td>${dataCad}</td></tr>`;
-        });
-
-        tbody.innerHTML = total > 0 ? html : '<tr><td colspan="4" style="text-align:center; padding:20px;">Nenhum cliente cadastrado.</td></tr>';
-        if(countEl) countEl.innerText = total;
-    } catch (e) { console.error("Erro Clientes:", e); }
+    if(tbody) tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px;">Listagem de clientes via banco em breve.</td></tr>';
 }
 
 // --- 6. CATEGORIAS, PRODUTOS E OUTROS ---
 async function renderizarCategorias() {
     try {
-        const tbody = document.getElementById('tabela-categorias');
-        const q = await getDocs(query(categoriasCollection, orderBy("nome")));
-        todasCategoriasCache = [];
-        q.forEach(d => { todasCategoriasCache.push({ id:d.id, ...d.data() }); });
+        // Pega categorias existentes dos produtos (dinâmico)
+        const res = await fetch('http://127.0.0.1:3000/categories');
+        const cats = await res.json();
+        todasCategoriasCache = cats;
         
+        const tbody = document.getElementById('tabela-categorias');
         if(tbody) {
             tbody.innerHTML = '';
             todasCategoriasCache.forEach(c => {
-                tbody.innerHTML += `<tr><td>${c.nome}</td><td><i class="fas fa-trash" style="color:red; cursor:pointer;" onclick="window.delCategoria('${c.id}')"></i></td></tr>`;
+                tbody.innerHTML += `<tr><td>${c.nome}</td><td>-</td></tr>`;
             });
         }
         atualizarSelectCategorias();
@@ -321,44 +283,19 @@ function atualizarSelectCategorias() {
     todasCategoriasCache.forEach(c => { select.innerHTML += `<option value="${c.nome}">${c.nome}</option>`; });
 }
 
-const btnSaveCat = document.getElementById('btn-save-cat');
-if(btnSaveCat) {
-    btnSaveCat.addEventListener('click', async () => {
-        const nome = document.getElementById('nova-cat-nome').value.trim();
-        if(!nome) return showToast("Digite um nome!", "error");
-        try {
-            await addDoc(categoriasCollection, { nome: nome });
-            document.getElementById('modalCategoria').style.display='none';
-            document.getElementById('nova-cat-nome').value = '';
-            showToast("Categoria criada!");
-            renderizarCategorias();
-        } catch(e) { showToast("Erro ao criar.", "error"); }
-    });
-}
-window.delCategoria = async (id) => { if(confirm("Excluir?")) { await deleteDoc(doc(db, "categorias", id)); renderizarCategorias(); } }
-
-window.abrirModalProduto = () => { 
-    document.getElementById('prod-id').value=""; 
-    document.getElementById('modal-titulo').innerText="Novo Produto";
-    filesToUpload = []; 
-    const prev = document.getElementById('preview-container'); if(prev) prev.innerHTML = "";
-    ['prod-nome','prod-preco','prod-preco-antigo','prod-estoque','prod-desc'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ""; });
-    atualizarSelectCategorias();
-    document.getElementById('modalProduto').style.display='flex'; 
-}
-window.fecharModal = () => document.getElementById('modalProduto').style.display='none';
-
+// --- PRODUTOS ---
 async function renderizarTabela() {
     const tbody = document.getElementById('tabela-produtos');
     if(!tbody) return;
     try {
-        const q = await getDocs(produtosCollection);
-        todosProdutosCache = [];
+        const res = await fetch('http://127.0.0.1:3000/products');
+        todosProdutosCache = await res.json();
         tbody.innerHTML = ''; 
-        q.forEach(d => {
-            const p = d.data(); p.id = d.id; todosProdutosCache.push(p);
+        todosProdutosCache.forEach(p => {
             const img = (p.imagens && p.imagens.length > 0) ? p.imagens[0] : (p.img || 'img/no-image.png');
-            tbody.innerHTML += `<tr><td><img src="${img}" style="width:40px;height:40px;object-fit:cover;border-radius:4px;"></td><td>${p.nome}</td><td style="font-weight:bold; color:${(parseInt(p.estoque)||0)<5?'red':'green'}">${p.estoque}</td><td>${fmtMoney(p.preco)}</td><td><i class="fas fa-edit" onclick="window.editarProduto('${p.id}')" style="margin-right:10px;cursor:pointer;color:blue;"></i><i class="fas fa-trash" onclick="window.deletarProduto('${p.id}')" style="color:red;cursor:pointer;"></i></td></tr>`;
+            // ID numérico para string
+            const pId = String(p.id);
+            tbody.innerHTML += `<tr><td><img src="${img}" style="width:40px;height:40px;object-fit:cover;border-radius:4px;"></td><td>${p.nome}</td><td style="font-weight:bold; color:${(parseInt(p.estoque)||0)<5?'red':'green'}">${p.estoque}</td><td>${fmtMoney(p.preco)}</td><td><i class="fas fa-edit" onclick="window.editarProduto('${pId}')" style="margin-right:10px;cursor:pointer;color:blue;"></i><i class="fas fa-trash" onclick="window.deletarProduto('${pId}')" style="color:red;cursor:pointer;"></i></td></tr>`;
         });
         verificarEstoqueCritico();
     } catch(e) { console.error(e); }
@@ -367,15 +304,15 @@ async function renderizarTabela() {
 window.editarProduto = async (id) => {
     toggleLoading(true);
     try {
-        const d = await getDoc(doc(db,"produtos",id));
-        if(d.exists()) {
-            const p = d.data();
+        // Busca do cache local para agilidade
+        const p = todosProdutosCache.find(x => String(x.id) === String(id));
+        if(p) {
             filesToUpload = [];
             document.getElementById('prod-id').value = id;
             document.getElementById('modal-titulo').innerText = "Editar Produto";
             document.getElementById('prod-nome').value = p.nome;
             document.getElementById('prod-preco').value = p.preco;
-            document.getElementById('prod-preco-antigo').value = p.precoOriginal||"";
+            document.getElementById('prod-preco-antigo').value = p.preco_original||"";
             document.getElementById('prod-estoque').value = p.estoque;
             atualizarSelectCategorias();
             document.getElementById('prod-cat').value = p.categoria || "Geral";
@@ -386,7 +323,13 @@ window.editarProduto = async (id) => {
         }
     } catch(e){} finally { toggleLoading(false); }
 }
-window.deletarProduto = async (id) => { if(confirm("Excluir?")) { await deleteDoc(doc(db,"produtos",id)); renderizarTabela(); } }
+
+window.deletarProduto = async (id) => { 
+    if(confirm("Excluir?")) { 
+        await fetch(`http://127.0.0.1:3000/products/${id}`, { method: 'DELETE' });
+        renderizarTabela(); 
+    } 
+}
 
 const btnSave = document.getElementById('btn-save-prod');
 if(btnSave) {
@@ -399,17 +342,43 @@ if(btnSave) {
         toggleLoading(true);
         try {
             let urls = [];
+            // --- UPLOAD PARA FIREBASE STORAGE (MANTIDO) ---
             for (const file of filesToUpload) {
                 const s = await uploadBytes(ref(storage, `produtos/${Date.now()}_${file.name}`), file);
                 urls.push(await getDownloadURL(s.ref));
             }
-            const dados = { nome, preco:parseFloat(preco), precoOriginal:document.getElementById('prod-preco-antigo').value?parseFloat(document.getElementById('prod-preco-antigo').value):null, estoque:parseInt(estoque)||0, categoria:document.getElementById('prod-cat').value, descricao:document.getElementById('prod-desc').value, dataAtualizacao:new Date() };
+            
+            const dados = { 
+                nome, 
+                preco:parseFloat(preco), 
+                preco_original:document.getElementById('prod-preco-antigo').value?parseFloat(document.getElementById('prod-preco-antigo').value):null, 
+                estoque:parseInt(estoque)||0, 
+                categoria:document.getElementById('prod-cat').value, 
+                descricao:document.getElementById('prod-desc').value 
+            };
+
+            // Se for edição e não teve upload novo, mantém as imagens antigas
             if(id) {
-                const snap = await getDoc(doc(db,"produtos",id));
-                const imgsAtuais = snap.exists() ? (snap.data().imagens||[]) : [];
-                if(urls.length>0) dados.imagens = urls; else dados.imagens = imgsAtuais;
-                await updateDoc(doc(db,"produtos",id), dados);
-            } else { dados.imagens = urls; dados.dataCriacao = new Date(); await addDoc(produtosCollection, dados); }
+                if(urls.length === 0) {
+                    const prodAtual = todosProdutosCache.find(p => String(p.id) === String(id));
+                    if(prodAtual) urls = prodAtual.imagens || [];
+                }
+                dados.imagens = urls;
+                
+                await fetch(`http://127.0.0.1:3000/products/${id}`, {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(dados)
+                });
+            } else { 
+                // Criação
+                dados.imagens = urls; 
+                await fetch('http://127.0.0.1:3000/products', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(dados)
+                });
+            }
             document.getElementById('modalProduto').style.display='none';
             renderizarTabela(); renderizarDashboard(); showToast("Salvo!");
         } catch(e){ console.error(e); showToast("Erro ao salvar", "error"); } finally { toggleLoading(false); }
@@ -420,6 +389,7 @@ function showToast(msg, type='success') { if(typeof Toastify !== 'undefined') To
 function toggleLoading(show) { const el = document.getElementById('loading-overlay'); if(el) el.style.display = show ? 'flex' : 'none'; }
 function fmtMoney(val) { return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val); }
 
+// --- ARRASTAR E SOLTAR (MANTIDO IGUAL) ---
 function initDragAndDrop() {
     const dropZone = document.getElementById('drop-zone');
     const input = document.getElementById('prod-imgs-hidden');
@@ -479,38 +449,17 @@ sections.forEach(s => {
         l.classList.add('active');
     });
 });
-const btnLogout = document.getElementById('btn-logout');
-if(btnLogout) btnLogout.addEventListener('click', async (e)=>{ e.preventDefault(); await signOut(auth); window.location.href="login.html"; });
 
-async function renderizarBanners() {
-    const tb = document.getElementById('tabela-banners');
-    if(!tb) return;
-    const q = await getDocs(bannersCollection); tb.innerHTML='';
-    q.forEach(d => { const b=d.data(); tb.innerHTML += `<tr><td><img src="${b.img}" style="width:80px;"></td><td>${b.titulo}</td><td>${b.subtitulo}</td><td><i class="fas fa-trash" style="color:red;cursor:pointer;" onclick="window.delBanner('${d.id}')"></i></td></tr>`; });
+window.abrirModalProduto = () => { 
+    document.getElementById('prod-id').value=""; 
+    document.getElementById('modal-titulo').innerText="Novo Produto";
+    filesToUpload = []; 
+    const prev = document.getElementById('preview-container'); if(prev) prev.innerHTML = "";
+    ['prod-nome','prod-preco','prod-preco-antigo','prod-estoque','prod-desc'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ""; });
+    atualizarSelectCategorias();
+    document.getElementById('modalProduto').style.display='flex'; 
 }
-const btnBan = document.getElementById('btn-save-banner');
-if(btnBan) btnBan.addEventListener('click', async () => {
-    const t = document.getElementById('banner-titulo').value;
-    const f = document.getElementById('banner-img').files[0];
-    if(t && f) { 
-        toggleLoading(true);
-        const snap = await uploadBytes(ref(storage, `banners/${Date.now()}`), f);
-        const url = await getDownloadURL(snap.ref);
-        await addDoc(bannersCollection, { titulo:t, subtitulo:document.getElementById('banner-sub').value, img:url });
-        document.getElementById('modalBanner').style.display='none'; renderizarBanners(); toggleLoading(false);
-    }
-});
-window.delBanner = async(id)=>{ if(confirm("Apagar?")) { await deleteDoc(doc(db,"banners",id)); renderizarBanners(); }};
+window.fecharModal = () => document.getElementById('modalProduto').style.display='none';
 
-async function renderizarCupons() {
-    const tb = document.getElementById('tabela-cupons');
-    if(!tb) return;
-    const q = await getDocs(cuponsCollection); tb.innerHTML='';
-    q.forEach(d => { const c=d.data(); tb.innerHTML += `<tr><td>${c.codigo}</td><td>${c.desconto}%</td><td>${c.validade||'-'}</td><td><i class="fas fa-trash" style="color:red;cursor:pointer;" onclick="window.delCupom('${d.id}')"></i></td></tr>`; });
-}
-const btnCup = document.getElementById('btn-save-cupom');
-if(btnCup) btnCup.addEventListener('click', async () => {
-    const c = document.getElementById('cupom-code').value;
-    if(c) { await addDoc(cuponsCollection, { codigo:c, desconto:document.getElementById('cupom-val').value, validade:document.getElementById('cupom-validade').value }); document.getElementById('modalCupom').style.display='none'; renderizarCupons(); }
-});
-window.delCupom = async(id)=>{ if(confirm("Apagar?")) { await deleteDoc(doc(db,"cupons",id)); renderizarCupons(); }};
+// Inicializa
+checkAuth();

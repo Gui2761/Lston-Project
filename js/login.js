@@ -1,4 +1,4 @@
-// js/login.js (Versão Node.js)
+// js/login.js (Versão Corrigida: Redireciona Admin para o Painel)
 
 const notify = (msg, type='success') => {
     if(typeof Toastify !== 'undefined') Toastify({ text: msg, duration: 3000, style: { background: type==='error'?"#e74c3c":"#2c3e50" } }).showToast(); 
@@ -18,12 +18,12 @@ document.getElementById('loginForm').addEventListener('submit', async function(e
         btn.innerText = "Entrando..."; btn.disabled = true;
 
         // Conecta com seu servidor local
-        // Dentro de js/login.js
-    const response = await fetch('http://127.0.0.1:3000/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, senha })
-    });
+        const response = await fetch('http://127.0.0.1:3000/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, senha })
+        });
+
         const data = await response.json();
 
         if (response.ok) {
@@ -34,9 +34,13 @@ document.getElementById('loginForm').addEventListener('submit', async function(e
             notify("Login com sucesso!", "success");
             
             setTimeout(() => {
-                // Se for admin (vamos configurar isso depois), manda pro admin
-                // Por enquanto manda todos pra home
-                window.location.href = 'index.html';
+                // --- AQUI ESTA A CORREÇÃO ---
+                // Verifica se o usuário tem o crachá de Admin
+                if (data.user.is_admin) {
+                    window.location.href = 'admin.html'; // Manda pro Painel
+                } else {
+                    window.location.href = 'index.html'; // Manda pra Loja
+                }
             }, 1500);
         } else {
             notify(data.error || "Login falhou.", "error");

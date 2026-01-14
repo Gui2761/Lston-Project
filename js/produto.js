@@ -1,7 +1,11 @@
-import { db, auth } from "./firebaseConfig.js";
-import { doc, getDoc, collection, getDocs, query, where, addDoc, limit, updateDoc } from "firebase/firestore";
-import { onAuthStateChanged } from "firebase/auth";
+// js/produto.js (VERSÃO COMPLETA RESTAURADA - Conectada ao Node.js)
 
+import { db, auth } from "./firebaseConfig.js";
+// Mantemos Firestore APENAS para Reviews e Auth (Legado)
+import { collection, addDoc, getDocs, query, where, orderBy } from "firebase/firestore";
+import { onAuthStateChanged, signOut } from "firebase/auth";
+
+// --- VARIÁVEIS GLOBAIS ---
 const urlParams = new URLSearchParams(window.location.search);
 const produtoId = urlParams.get('id');
 const container = document.getElementById('product-detail-container');
@@ -15,7 +19,7 @@ let currentUserId = null;
 let desconto = 0;
 let freteValor = 0;
 
-// --- TABELA DE FRETE ---
+// --- TABELA DE FRETE (RESTAURADA) ---
 const TABELA_FRETE = {
     'SE': { base: 10.00, adicional: 0.50, prazo: '1-2 dias' },
     'BA': { base: 18.00, adicional: 1.00, prazo: '3-5 dias' },
@@ -28,7 +32,7 @@ const TABELA_FRETE = {
     'PADRAO': { base: 35.00, adicional: 5.00, prazo: '10-20 dias' }
 };
 
-// --- HELPERS ---
+// --- HELPERS VISUAIS ---
 window.showToast = (msg, type='success') => { if(typeof Toastify !== 'undefined') Toastify({ text: msg, duration: 3000, style: { background: type==='error'?"#e74c3c":"#2c3e50" } }).showToast(); else alert(msg); }
 window.fmtMoney = (val) => { return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val); }
 window.toggleLoading = (show) => { const el = document.getElementById('loading-overlay'); if(el) el.style.display = show ? 'flex' : 'none'; }
@@ -56,16 +60,28 @@ window.toggleTheme = () => {
     document.getElementById('theme-toggle').className=n==='dark'?'fas fa-sun':'fas fa-moon'; 
 }
 
-// AUTH
-onAuthStateChanged(auth, (user) => { 
-    if (user) { 
-        currentUserEmail = user.email; 
-        currentUserId = user.uid;
-        document.getElementById('user-name').innerText = user.email.split('@')[0]; 
+// --- AUTHENTICAÇÃO (Híbrida: SQL + Firebase) ---
+function checkAuth() {
+    // 1. Tenta pegar usuário do Login novo (PostgreSQL)
+    const localUser = localStorage.getItem('lston_user');
+    if (localUser) {
+        const u = JSON.parse(localUser);
+        currentUserEmail = u.email;
+        currentUserId = u.id; // ID Numérico do SQL
+        if(document.getElementById('user-name')) document.getElementById('user-name').innerText = u.nome.split(' ')[0];
     } 
-});
+    // 2. Monitora Firebase (caso seja usuário antigo)
+    onAuthStateChanged(auth, (user) => { 
+        if (user && !localUser) { 
+            currentUserEmail = user.email; 
+            currentUserId = user.uid;
+            if(document.getElementById('user-name')) document.getElementById('user-name').innerText = user.email.split('@')[0]; 
+        } 
+    });
+}
+checkAuth();
 
-// --- FAVORITOS (MODAL) ---
+// --- LOGICA DE FAVORITOS (Mantida) ---
 window.toggleFavoritosModal = () => {
     const m = document.getElementById('favoritos-modal');
     m.style.display = (m.style.display === 'flex') ? 'none' : 'flex';
@@ -74,13 +90,17 @@ window.toggleFavoritosModal = () => {
 
 window.toggleFavorito = (id, el, e) => { 
     e.stopPropagation(); 
-    if(favoritos.includes(id)) { 
-        favoritos = favoritos.filter(f => f !== id); 
-        el.className = 'far fa-heart fav-btn'; 
+    // Garante compatibilidade de IDs (String vs Numero)
+    const idSafe = isNaN(id) ? id : parseInt(id);
+    const exists = favoritos.some(f => f == id);
+
+    if(exists) { 
+        favoritos = favoritos.filter(f => f != id); 
+        if(el) el.className = 'far fa-heart fav-btn'; 
         window.showToast("Removido dos favoritos"); 
     } else { 
-        favoritos.push(id); 
-        el.className = 'fas fa-heart fav-btn active'; 
+        favoritos.push(idSafe); 
+        if(el) el.className = 'fas fa-heart fav-btn active'; 
         window.showToast("Favoritado!"); 
     } 
     localStorage.setItem('lston_favoritos', JSON.stringify(favoritos));
@@ -95,118 +115,120 @@ function atualizarFavoritosUI() {
     lista.innerHTML = '';
     if(favoritos.length === 0) { lista.innerHTML = '<p style="text-align:center; padding:20px;">Lista vazia.</p>'; return; }
     
-    // Busca detalhes dos favoritos (limitado a 10 para performance)
-    carregarProdutosFavoritos(lista);
-}
-
-async function carregarProdutosFavoritos(listaEl) {
-    if(favoritos.length === 0) return;
-    const idsParaBuscar = favoritos.slice(0, 10);
-    const q = query(collection(db, "produtos"), where("__name__", "in", idsParaBuscar));
-    const snap = await getDocs(q);
-    
-    const idsEncontrados = [];
-    snap.forEach(d => {
-        const item = d.data(); item.id = d.id;
-        idsEncontrados.push(item.id);
-        let img = (item.imagens && item.imagens.length > 0) ? item.imagens[0] : (item.img || '');
-        listaEl.innerHTML += `
-            <div class="cart-item">
-                <div style="display:flex;align-items:center;">
-                    <img src="${img}" style="width:50px;height:50px;object-fit:cover;margin-right:10px;border-radius:4px;">
-                    <div><strong>${item.nome}</strong><br>${window.fmtMoney(item.preco)}</div>
-                </div>
-                <div style="display:flex;gap:10px;align-items:center;">
-                    <i class="fas fa-cart-plus" style="cursor:pointer;color:green;" title="Adicionar" onclick="adicionarComQtdDireto('${item.id}', 1, '${img}', '${item.nome}', ${item.preco}, ${item.estoque})"></i>
-                    <i class="fas fa-trash" style="cursor:pointer;color:red;" title="Remover" onclick="window.toggleFavorito('${item.id}', this, event); atualizarFavoritosUI()"></i>
-                </div>
-            </div>`;
+    // Busca produtos para exibir nos favoritos
+    // Como agora os IDs podem vir do SQL, fazemos um fetch geral para renderizar (idealmente seria um endpoint específico)
+    fetch('http://127.0.0.1:3000/products').then(r=>r.json()).then(todos => {
+        const meusFavs = todos.filter(p => favoritos.some(f => f == p.id));
+        
+        meusFavs.forEach(item => {
+            let img = (item.imagens && item.imagens.length > 0) ? item.imagens[0] : (item.img || '');
+            lista.innerHTML += `
+                <div class="cart-item">
+                    <div style="display:flex;align-items:center;">
+                        <img src="${img}" style="width:50px;height:50px;object-fit:cover;margin-right:10px;border-radius:4px;">
+                        <div><strong>${item.nome}</strong><br>${window.fmtMoney(parseFloat(item.preco))}</div>
+                    </div>
+                    <div style="display:flex;gap:10px;align-items:center;">
+                        <i class="fas fa-cart-plus" style="cursor:pointer;color:green;" title="Adicionar" onclick="adicionarComQtdDireto('${item.id}', 1, '${img}', '${item.nome}', ${item.preco}, ${item.estoque})"></i>
+                        <i class="fas fa-trash" style="cursor:pointer;color:red;" title="Remover" onclick="window.toggleFavorito('${item.id}', this, event); atualizarFavoritosUI()"></i>
+                    </div>
+                </div>`;
+        });
     });
-
-    if(idsEncontrados.length < idsParaBuscar.length) {
-        const novosFavoritos = favoritos.filter(id => !idsParaBuscar.includes(id) || idsEncontrados.includes(id));
-        favoritos = novosFavoritos;
-        localStorage.setItem('lston_favoritos', JSON.stringify(favoritos));
-        const favCount = document.getElementById('fav-count');
-        if(favCount) favCount.innerText = favoritos.length;
-    }
 }
 
 window.adicionarComQtdDireto = (id, qtd, img, nome, preco, estoque) => {
-    const itemExistente = carrinho.find(p => p.id === id);
+    const itemExistente = carrinho.find(p => p.id == id);
     if (itemExistente && itemExistente.qtd + qtd > estoque) { window.showToast("Estoque insuficiente!", "error"); return; }
     if (qtd > estoque) { window.showToast("Estoque insuficiente!", "error"); return; }
+    
     if(itemExistente) { itemExistente.qtd += qtd; } 
-    else { carrinho.push({ id, img, nome, preco, estoque, qtd }); }
+    else { carrinho.push({ id, img, nome, preco: parseFloat(preco), estoque, qtd }); }
+    
     localStorage.setItem('lston_carrinho', JSON.stringify(carrinho));
-    window.showToast("Adicionado!"); atualizarCarrinhoUI();
+    window.showToast("Adicionado!"); 
+    atualizarCarrinhoUI();
 }
 
-// --- PRODUTO PRINCIPAL ---
+// --- CARREGAMENTO DO PRODUTO (MODIFICADO PARA NODE.JS) ---
 async function carregarProduto() {
     if(!produtoId) { container.innerHTML = "<p style='text-align:center;padding:50px;'>Produto não encontrado.</p>"; return; }
+    
     try {
-        const docRef = doc(db, "produtos", produtoId);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-            const prod = docSnap.data(); prod.id = docSnap.id;
-            renderizarLayoutNovo(prod);
-            carregarReviews(produtoId);
-            carregarRelacionados(prod.categoria); 
-        }
-    } catch (e) { console.error(e); }
+        // BUSCA DO SEU SERVIDOR LOCAL
+        const res = await fetch(`http://127.0.0.1:3000/products/${produtoId}`);
+        if(!res.ok) throw new Error("Produto não encontrado");
+        
+        const prod = await res.json();
+        
+        // Normalização de dados (Postgres retorna strings às vezes)
+        prod.preco = parseFloat(prod.preco);
+        prod.estoque = parseInt(prod.estoque);
+        
+        renderizarLayoutNovo(prod);
+        
+        // Mantém reviews no Firebase (não migramos isso)
+        carregarReviews(produtoId); 
+        
+        // Busca relacionados (usando o endpoint geral e filtrando)
+        carregarRelacionados(prod.categoria); 
+        
+    } catch (e) { 
+        console.error(e); 
+        container.innerHTML = "<p style='text-align:center;padding:50px;'>Erro ao carregar produto.</p>";
+    }
 }
 
-// --- RELACIONADOS ---
 async function carregarRelacionados(categoria) {
     if(!categoria || !relatedContainer) return;
-    const q = query(collection(db, "produtos"), where("categoria", "==", categoria), limit(5));
-    const snap = await getDocs(q);
-    relatedContainer.innerHTML = "";
-    let count = 0;
-    snap.forEach(d => {
-        const p = d.data();
-        if(d.id !== produtoId && count < 4) { 
-            count++;
+    try {
+        const res = await fetch('http://127.0.0.1:3000/products');
+        const todos = await res.json();
+        
+        // Filtra no front
+        const rel = todos.filter(p => p.categoria === categoria && String(p.id) !== String(produtoId)).slice(0, 4);
+        
+        relatedContainer.innerHTML = "";
+        if(rel.length === 0) { relatedContainer.innerHTML = "<p>Sem produtos relacionados.</p>"; return; }
+
+        rel.forEach(p => {
             let img = (p.imagens && p.imagens.length > 0) ? p.imagens[0] : (p.img || '');
             relatedContainer.innerHTML += `
                 <div class="product-card" style="width:220px; min-width:220px;">
-                    <div class="product-img" style="background-image: url('${img}'); height:180px; cursor:pointer;" onclick="window.location.href='produto.html?id=${d.id}'"></div>
+                    <div class="product-img" style="background-image: url('${img}'); height:180px; cursor:pointer;" onclick="window.location.href='produto.html?id=${p.id}'"></div>
                     <div style="padding:10px; text-align:center;">
                         <h4 style="font-size:14px; margin-bottom:5px; height:40px; overflow:hidden;">${p.nome}</h4>
-                        <div class="new-price" style="font-size:16px;">${window.fmtMoney(p.preco)}</div>
-                        <button class="btn-add" onclick="window.location.href='produto.html?id=${d.id}'" style="margin-top:10px; font-size:12px; padding:8px;">Ver Detalhes</button>
+                        <div class="new-price" style="font-size:16px;">${window.fmtMoney(parseFloat(p.preco))}</div>
+                        <button class="btn-add" onclick="window.location.href='produto.html?id=${p.id}'" style="margin-top:10px; font-size:12px; padding:8px;">Ver Detalhes</button>
                     </div>
                 </div>`;
-        }
-    });
-    if(count === 0) relatedContainer.innerHTML = "<p>Sem produtos relacionados.</p>";
+        });
+    } catch(e){ console.error("Erro relacionados:", e); }
 }
 
 function renderizarLayoutNovo(prod) {
-    let imagens = prod.imagens || [prod.img || 'https://via.placeholder.com/500'];
+    let imagens = (prod.imagens && prod.imagens.length > 0) ? prod.imagens : ['https://via.placeholder.com/500'];
     let thumbsHtml = '';
     imagens.forEach((url, index) => {
         const borderStyle = index === 0 ? '2px solid #2c3e50' : '2px solid #eee';
         thumbsHtml += `<div class="thumb-box" style="width:80px;height:80px;background:var(--bg-secondary);margin-bottom:10px;cursor:pointer;border:${borderStyle};display:flex;justify-content:center;align-items:center;" onclick="trocarImagem('${url}', this)"><img src="${url}" style="max-width:100%;max-height:100%;object-fit:contain;"></div>`;
     });
-    const est = parseInt(prod.estoque) || 0;
-    const btnDisabled = est === 0 ? 'disabled style="background:#ccc;"' : '';
-    let priceHtml = `<div class="prod-price-big">${window.fmtMoney(prod.preco)}</div>`;
     
-    // Configuração do Link do WhatsApp
+    const est = prod.estoque;
+    const btnDisabled = est === 0 ? 'disabled style="background:#ccc;"' : '';
+    
+    // Link do WhatsApp
     const textoZap = `Olá, tenho interesse no produto *${prod.nome}* que vi no site!`;
-    const linkZap = `https://wa.me/5511999999999?text=${encodeURIComponent(textoZap)}`; // Substitua pelo seu número
+    const linkZap = `https://wa.me/5579999999999?text=${encodeURIComponent(textoZap)}`;
 
     container.innerHTML = `
         <div class="product-page-container">
-        
             <h1 class="prod-title-big">${prod.nome}</h1>
             <div class="product-layout">
                 <div class="gallery-wrapper"><div class="thumbnails-col">${thumbsHtml}</div><div class="main-image-box"><img id="main-img-display" src="${imagens[0]}" alt="${prod.nome}"></div></div>
                 <div class="details-col">
                     <div class="prod-desc-box"><h3>Descrição</h3><p>${prod.descricao || 'Sem descrição.'}</p></div>
-                    <div>${priceHtml}</div>
+                    <div class="prod-price-big">${window.fmtMoney(prod.preco)}</div>
                     <p style="color:${est<5?'#e74c3c':'var(--text-muted)'}; font-weight:bold;">
                         ${est < 5 && est > 0 ? `<i class="fas fa-exclamation-triangle"></i> Restam apenas ${est} unidades!` : `Estoque: ${est} un.`}
                     </p>
@@ -224,32 +246,46 @@ function renderizarLayoutNovo(prod) {
                 </div>
             </div>
         </div>`;
+        
     if(est > 0) document.getElementById('btn-add-cart').addEventListener('click', () => adicionarComQtdPagina(prod, imagens[0]));
 }
 
-// --- FUNÇÕES DE CARRINHO E CHECKOUT ---
+// --- FUNÇÕES DE UI E CARRINHO (RESTAURADAS COMPLETO) ---
 window.trocarImagem = function(url, elemento) { document.getElementById('main-img-display').src = url; document.querySelectorAll('.thumb-box').forEach(el => el.style.border = '2px solid #eee'); if(elemento) elemento.style.border = '2px solid #2c3e50'; }
 window.alterarQtdDetail = (delta) => { const input = document.getElementById('detail-qty'); let val = parseInt(input.value) + delta; if(val < 1) val = 1; input.value = val; }
 
 function adicionarComQtdPagina(prod, img) {
     const qtdInput = document.getElementById('detail-qty');
     const qtd = parseInt(qtdInput.value);
-    const estoqueDisponivel = parseInt(prod.estoque) || 0;
-    const itemExistente = carrinho.find(p => p.id === prod.id);
-    const qtdNoCarrinho = itemExistente ? itemExistente.qtd : 0;
-    if (qtdNoCarrinho + qtd > estoqueDisponivel) { window.showToast(`Estoque insuficiente!`, "error"); return; }
-    if(itemExistente) { itemExistente.qtd += qtd; } else { carrinho.push({ id: prod.id, img: img, ...prod, qtd: qtd }); }
+    const itemExistente = carrinho.find(p => p.id == prod.id);
+    
+    if (itemExistente && itemExistente.qtd + qtd > prod.estoque) { window.showToast(`Estoque insuficiente!`, "error"); return; }
+    if (qtd > prod.estoque) { window.showToast(`Estoque insuficiente!`, "error"); return; }
+    
+    if(itemExistente) { itemExistente.qtd += qtd; } 
+    else { carrinho.push({ id: prod.id, img: img, nome: prod.nome, preco: prod.preco, estoque: prod.estoque, qtd: qtd }); }
+    
     localStorage.setItem('lston_carrinho', JSON.stringify(carrinho));
-    window.showToast("Adicionado!"); atualizarCarrinhoUI(); window.toggleCarrinho();
+    window.showToast("Adicionado!"); 
+    atualizarCarrinhoUI();
+    window.toggleCarrinho();
 }
 
 function atualizarCarrinhoUI() {
     const count = document.getElementById('cart-count');
-    if(count) { count.innerText = carrinho.reduce((acc, i) => acc + i.qtd, 0); count.style.display = carrinho.length > 0 ? 'block' : 'none'; }
+    if(count) { const totalItens = carrinho.reduce((acc, i) => acc + i.qtd, 0); count.innerText = totalItens; count.style.display = totalItens > 0 ? 'block' : 'none'; }
+    
     const lista = document.getElementById('itens-carrinho');
     if(!lista) return;
-    let subtotal = 0; lista.innerHTML = '';
-    if(carrinho.length === 0) { lista.innerHTML = '<p style="text-align:center; padding:20px; color:#999;">Vazio.</p>'; if(document.getElementById('cart-total')) document.getElementById('cart-total').innerHTML = "R$ 0,00"; return; }
+    
+    let subtotal = 0; 
+    lista.innerHTML = '';
+    
+    if(carrinho.length === 0) { 
+        lista.innerHTML = '<p style="text-align:center; padding:20px; color:#999;">Vazio.</p>'; 
+        if(document.getElementById('cart-total')) document.getElementById('cart-total').innerHTML = "R$ 0,00"; 
+        return; 
+    }
     
     carrinho.forEach((item, index) => {
         subtotal += parseFloat(item.preco) * item.qtd;
@@ -276,27 +312,25 @@ window.alterarQtdCarrinho = (index, delta) => {
     atualizarCarrinhoUI();
 }
 window.removerDoCarrinho = (index) => { carrinho.splice(index, 1); localStorage.setItem('lston_carrinho', JSON.stringify(carrinho)); atualizarCarrinhoUI(); }
-window.toggleCarrinho = () => { 
-    const modal = document.getElementById('carrinho-modal');
-    modal.style.display = (modal.style.display === 'flex') ? 'none' : 'flex'; 
-    atualizarCarrinhoUI(); 
-}
+window.toggleCarrinho = () => { const m = document.getElementById('carrinho-modal'); if(m) { m.style.display = (m.style.display === 'flex') ? 'none' : 'flex'; atualizarCarrinhoUI(); } }
 
-// --- FUNÇÕES DE CHECKOUT INTEGRADAS ---
+// --- CHECKOUT LOGIC (MANTIDA E CONECTADA AO NODE) ---
 window.irParaCheckout = async () => { 
     document.getElementById('etapa-carrinho').style.display='none'; 
     document.getElementById('etapa-checkout').style.display='flex'; 
+    
+    // Tenta preencher dados do usuário
     if(currentUserId) {
         try {
-            const docRef = doc(db, "users", currentUserId);
-            const docSnap = await getDoc(docRef);
-            if (docSnap.exists()) {
-                const dados = docSnap.data();
-                if(dados.nome) document.getElementById('check-nome').value = dados.nome;
-                if(dados.telefone) { const tf = document.getElementById('check-tel'); tf.value = dados.telefone; window.mascaraTel(tf); }
-                if(dados.cep) document.getElementById('check-cep').value = dados.cep;
-                if(dados.endereco) document.getElementById('check-endereco').value = `${dados.endereco}, ${dados.numero || ''} - ${dados.bairro || ''}`;
-                if(dados.cidade) document.getElementById('check-cidade').value = dados.cidade;
+            // Tenta cache local primeiro (Usuário SQL)
+            const localUser = localStorage.getItem('lston_user');
+            if(localUser) {
+                const u = JSON.parse(localUser);
+                if(u.nome) document.getElementById('check-nome').value = u.nome;
+                if(u.telefone) document.getElementById('check-tel').value = u.telefone;
+                if(u.cep) document.getElementById('check-cep').value = u.cep;
+                if(u.endereco) document.getElementById('check-endereco').value = u.endereco;
+                if(u.cidade) document.getElementById('check-cidade').value = u.cidade;
             }
         } catch(e) {}
     }
@@ -338,24 +372,29 @@ window.calcularFreteCarrinho = async () => {
     } catch(e){ resultDiv.innerText = "Erro."; } finally { window.toggleLoading(false); }
 }
 
-// Cupom Real
+// Cupom (Ainda usando Firestore pois não criamos tabela de cupons no SQL, mas poderia migrar)
 window.aplicarCupom = async () => {
     const input = document.getElementById('cupom-input');
     const codigoDigitado = input.value.trim().toUpperCase();
     if(!codigoDigitado) return window.showToast("Digite um código!", "error");
     window.toggleLoading(true);
     try {
-        const q = query(collection(db, "cupons"), where("codigo", "==", codigoDigitado));
+        const cuponsRef = collection(db, "cupons"); // Mantém no Firebase por enquanto
+        const q = query(cuponsRef, where("codigo", "==", codigoDigitado));
         const querySnapshot = await getDocs(q);
+        
         if (querySnapshot.empty) { window.toggleLoading(false); return window.showToast("Cupom inválido.", "error"); }
+        
         let cupomValido = null;
         querySnapshot.forEach(doc => { cupomValido = doc.data(); });
+        
         if(cupomValido.validade) {
             const hoje = new Date();
             const validade = new Date(cupomValido.validade);
             validade.setHours(23, 59, 59);
             if(hoje > validade) { window.toggleLoading(false); return window.showToast("Este cupom venceu!", "error"); }
         }
+        
         const percentual = parseFloat(cupomValido.desconto);
         if(percentual > 0) {
             desconto = percentual / 100;
@@ -366,7 +405,7 @@ window.aplicarCupom = async () => {
     } catch (e) { window.showToast("Erro ao validar cupom.", "error"); } finally { window.toggleLoading(false); }
 }
 
-// Confirmar Pedido
+// --- CONFIRMAÇÃO DE PEDIDO (AQUI ESTÁ A MUDANÇA PRINCIPAL) ---
 window.confirmarPedido = async () => {
     const nome = document.getElementById('check-nome').value;
     const telefone = document.getElementById('check-tel').value;
@@ -381,9 +420,9 @@ window.confirmarPedido = async () => {
     
     let subtotal = 0; carrinho.forEach(i => subtotal += parseFloat(i.preco) * i.qtd);
     const totalFinal = (subtotal - (subtotal * desconto)) + freteValor;
+    
     const resumoHtml = carrinho.map(i => `<li style="margin-bottom:5px;">${i.qtd}x ${i.nome} - <b>${window.fmtMoney(i.preco)}</b></li>`).join('');
     
-    // Fecha o modal antes do alerta
     document.getElementById('carrinho-modal').style.display = 'none';
 
     const confirmacao = await Swal.fire({
@@ -391,47 +430,48 @@ window.confirmarPedido = async () => {
         html: `<div style="text-align:left;font-size:14px;"><p><strong>Cliente:</strong> ${nome}</p><p><strong>Tel:</strong> ${telefone}</p><p><strong>End:</strong> ${endereco}</p><hr><ul style="list-style:none;padding:0;">${resumoHtml}</ul><hr><p style="text-align:right;">Total: <strong>${window.fmtMoney(totalFinal)}</strong></p></div>`,
         icon: 'question',
         showCancelButton: true,
-        confirmButtonColor: '#8bc34a',
-        cancelButtonColor: '#d33',
         confirmButtonText: '✅ Confirmar'
     });
 
     if (!confirmacao.isConfirmed) return;
 
     window.toggleLoading(true);
+
     try {
-        for (const item of carrinho) { 
-            const prodSnap = await getDoc(doc(db, "produtos", item.id));
-            if (!prodSnap.exists()) throw new Error(`Produto removido: ${item.nome}`);
-            if (parseInt(prodSnap.data().estoque) < item.qtd) throw new Error(`Estoque insuficiente: ${item.nome}`);
-        }
-        
-        const docRef = await addDoc(collection(db, "pedidos"), { 
-            cliente: nome, telefone, endereco, cidade, cep, pagamento, itens: carrinho, 
-            total: totalFinal, frete: freteValor, descontoAplicado: desconto, data: new Date().toISOString(), 
-            status: "Recebido", userEmail: currentUserEmail 
+        // ENVIANDO PARA O NODE.JS (PostgreSQL)
+        const response = await fetch('http://127.0.0.1:3000/orders', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                user_id: currentUserId,
+                cliente_nome: nome,
+                total: totalFinal,
+                frete_valor: freteValor,
+                metodo_pagamento: pagamento,
+                endereco_entrega: { rua: endereco, cidade, cep, telefone },
+                itens: carrinho
+            })
         });
-        
-        for (const item of carrinho) { 
-            const ref = doc(db, "produtos", item.id);
-            const snap = await getDoc(ref);
-            const nv = (parseInt(snap.data().estoque) || 0) - item.qtd; 
-            await updateDoc(ref, { estoque: nv });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            carrinho=[]; 
+            localStorage.setItem('lston_carrinho', '[]'); 
+            atualizarCarrinhoUI(); 
+            // Redireciona com ID do pedido
+            window.location.href = `sucesso.html?id=${data.orderId}&method=${pagamento}`;
+        } else {
+            throw new Error(data.error || "Erro desconhecido ao processar pedido.");
         }
-        
-        carrinho=[]; 
-        localStorage.setItem('lston_carrinho', '[]'); 
-        atualizarCarrinhoUI(); 
-        
-        window.location.href = `sucesso.html?id=${docRef.id}&method=${pagamento}`;
 
     } catch(e) { 
         window.toggleLoading(false);
-        Swal.fire('Erro', e.message || "Erro desconhecido.", 'error');
+        Swal.fire('Erro', e.message, 'error');
     }
 }
 
-// Frete da Página (Simples)
+// Frete Visual da Página
 window.calcularFretePagina = async () => { 
     const cep = document.getElementById('calc-cep').value.replace(/\D/g,''); 
     const res = document.getElementById('frete-res'); 
@@ -441,23 +481,38 @@ window.calcularFretePagina = async () => {
         const r = await fetch(`https://viacep.com.br/ws/${cep}/json/`); 
         const d = await r.json(); 
         if(d.erro) res.innerText="CEP não encontrado"; 
-        else res.innerHTML=`Frete para ${d.uf}: R$ 25,00 (Simulação)`; 
+        else {
+            const regra = TABELA_FRETE[d.uf] || TABELA_FRETE['PADRAO'];
+            res.innerHTML=`Frete para ${d.uf}: R$ ${regra.base.toFixed(2)} (Prazo: ${regra.prazo})`; 
+        }
     } catch(e){ res.innerText="Erro"; } 
 }
 
-// --- REVIEWS ---
+// --- REVIEWS (MANTIDO FIREBASE) ---
 window.enviarReview = async () => { 
     const t = document.getElementById('rev-text').value; 
     if(!t) return window.showToast("Escreva algo!", "error"); 
-    await addDoc(reviewsCollection, { produtoId, texto:t, nome:document.getElementById('rev-name').value||'Anônimo', stars:document.getElementById('rev-stars').value, data:new Date() }); 
+    await addDoc(reviewsCollection, { 
+        produtoId: String(produtoId), // Garante string para compatibilidade
+        texto:t, 
+        nome:document.getElementById('rev-name').value||'Anônimo', 
+        stars:document.getElementById('rev-stars').value, 
+        data:new Date() 
+    }); 
     window.showToast("Enviado!"); document.getElementById('rev-text').value=''; carregarReviews(produtoId); 
 }
+
 async function carregarReviews(pid) { 
-    const q = query(collection(db,"reviews"),where("produtoId","==",pid)); 
+    const q = query(reviewsCollection, where("produtoId","==", String(pid))); 
     const s = await getDocs(q); 
-    const l = document.getElementById('reviews-list'); l.innerHTML=''; 
+    const l = document.getElementById('reviews-list'); 
+    if(!l) return;
+    l.innerHTML=''; 
     if (s.empty) { l.innerHTML = '<p style="color:var(--text-muted);">Seja o primeiro a avaliar!</p>'; return; }
     s.forEach(d=>{ const r=d.data(); l.innerHTML+=`<div class="review-item"><strong>${r.nome}</strong> (${r.stars}★)<p>${r.texto}</p></div>`; }); 
 }
 
-carregarProduto(); atualizarCarrinhoUI(); atualizarFavoritosUI();
+// Inicializa
+carregarProduto(); 
+atualizarCarrinhoUI(); 
+atualizarFavoritosUI();
