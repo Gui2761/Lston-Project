@@ -1,4 +1,4 @@
-// js/main.js (Versão Final: Backend Node.js)
+// js/main.js (Versão Final: Conectada ao Node.js)
 
 import { db, auth } from "./firebaseConfig.js";
 import { collection, getDocs, addDoc, doc, updateDoc, setDoc, increment, query, where, getDoc } from "firebase/firestore";
@@ -58,11 +58,11 @@ window.toggleTheme = () => {
     if(icon) icon.className = n === 'dark' ? 'fas fa-sun' : 'fas fa-moon'; 
 }
 
-// --- 5. AUTH (Híbrido) ---
+// --- 5. AUTH (Híbrido: Node.js + Firebase Legado) ---
 onAuthStateChanged(auth, (user) => {
     const localUser = localStorage.getItem('lston_user');
     if (localUser) {
-        // Usuário do PostgreSQL (Prioridade)
+        // Usuário do PostgreSQL (Novo Sistema)
         const u = JSON.parse(localUser);
         currentUserEmail = u.email;
         currentUserId = u.id; // ID Numérico
@@ -71,7 +71,7 @@ onAuthStateChanged(auth, (user) => {
     } else if (user) {
         // Usuário legado do Firebase
         currentUserEmail = user.email;
-        currentUserId = user.uid;
+        currentUserId = user.uid; // ID Texto
         const userDisplay = document.getElementById('user-name');
         if(userDisplay) userDisplay.innerText = user.email.split('@')[0];
     }
@@ -82,7 +82,6 @@ async function carregarLoja() {
     if(container) container.innerHTML = '<p style="text-align:center; padding: 50px;">Carregando produtos...</p>';
     if(typeof contarVisita === 'function') contarVisita(); 
 
-    // Banners e Categorias (Mantido Firebase por enquanto)
     if(typeof carregarBanners === 'function') carregarBanners().catch(console.error);
     if(typeof carregarMenuCategorias === 'function') carregarMenuCategorias().catch(console.error);
 
@@ -372,7 +371,7 @@ window.confirmarPedido = async () => {
     window.toggleLoading(true);
 
     try {
-        // --- ENVIA PARA O SERVIDOR NODE.JS ---
+        // --- MÁGICA: ENVIA PARA O SERVIDOR NODE.JS ---
         const response = await fetch('http://127.0.0.1:3000/orders', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -393,6 +392,7 @@ window.confirmarPedido = async () => {
             carrinho=[]; 
             localStorage.setItem('lston_carrinho', '[]'); 
             atualizarCarrinhoUI(); 
+            // Redireciona com o ID do pedido que veio do PostgreSQL
             window.location.href = `sucesso.html?id=${data.orderId}&method=${pagamento}`;
         } else {
             throw new Error(data.error || "Erro desconhecido.");
