@@ -1,3 +1,5 @@
+// js/main.js (Versão Final: Backend Node.js)
+
 import { db, auth } from "./firebaseConfig.js";
 import { collection, getDocs, addDoc, doc, updateDoc, setDoc, increment, query, where, getDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
@@ -13,7 +15,7 @@ if(document.getElementById('theme-toggle')) {
 let carrinho = JSON.parse(localStorage.getItem('lston_carrinho')) || []; 
 let favoritos = JSON.parse(localStorage.getItem('lston_favoritos')) || []; 
 let todosProdutos = []; 
-let desconto = 0; // Desconto em porcentagem (0.10 = 10%)
+let desconto = 0; 
 let freteValor = 0; 
 let currentUserEmail = null;
 let currentUserId = null;
@@ -32,13 +34,11 @@ const TABELA_FRETE = {
     'PADRAO': { base: 35.00, adicional: 5.00, prazo: '10-20 dias' }
 };
 
-// --- 4. HELPERS E MÁSCARAS ---
+// --- 4. HELPERS ---
 window.showToast = (msg, type='success') => { if(typeof Toastify !== 'undefined') Toastify({ text: msg, duration: 3000, style: { background: type==='error'?"#e74c3c":"#2c3e50" } }).showToast(); else alert(msg); }
 window.fmtMoney = (val) => { return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val); }
 window.toggleLoading = (show) => { const el = document.getElementById('loading-overlay'); if(el) el.style.display = show ? 'flex' : 'none'; }
 window.mascaraCep = (el) => { el.value = el.value.replace(/\D/g, "").replace(/^(\d{5})(\d)/, "$1-$2"); };
-
-// Máscara de Telefone
 window.mascaraTel = (el) => {
     let v = el.value.replace(/\D/g, "").substring(0, 11);
     v = v.replace(/^(\d{2})(\d)/g, "($1) $2");
@@ -49,7 +49,6 @@ const checkoutTelInput = document.getElementById('check-tel');
 if(checkoutTelInput) { checkoutTelInput.addEventListener('input', function() { window.mascaraTel(this); }); }
 
 window.toggleMenu = () => { document.getElementById('nav-menu').classList.toggle('active'); }
-
 window.toggleTheme = () => { 
     const b = document.body; 
     const n = b.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'; 
@@ -59,9 +58,18 @@ window.toggleTheme = () => {
     if(icon) icon.className = n === 'dark' ? 'fas fa-sun' : 'fas fa-moon'; 
 }
 
-// --- 5. AUTH ---
+// --- 5. AUTH (Híbrido) ---
 onAuthStateChanged(auth, (user) => {
-    if (user) {
+    const localUser = localStorage.getItem('lston_user');
+    if (localUser) {
+        // Usuário do PostgreSQL (Prioridade)
+        const u = JSON.parse(localUser);
+        currentUserEmail = u.email;
+        currentUserId = u.id; // ID Numérico
+        const userDisplay = document.getElementById('user-name');
+        if(userDisplay) userDisplay.innerText = u.nome.split(' ')[0];
+    } else if (user) {
+        // Usuário legado do Firebase
         currentUserEmail = user.email;
         currentUserId = user.uid;
         const userDisplay = document.getElementById('user-name');
@@ -69,84 +77,72 @@ onAuthStateChanged(auth, (user) => {
     }
 });
 
-// --- 6. CORE: LOJA E MENU DINÂMICO ---
+// --- 6. LOJA (Busca no Node.js) ---
 async function carregarLoja() {
     if(container) container.innerHTML = '<p style="text-align:center; padding: 50px;">Carregando produtos...</p>';
-    
-    // Inicia Contador de Visitas (Novo)
-    contarVisita();
+    if(typeof contarVisita === 'function') contarVisita(); 
 
-    carregarBanners().catch(err => console.error("Erro banner:", err));
-    carregarMenuCategorias().catch(err => console.error("Erro categorias:", err));
+    // Banners e Categorias (Mantido Firebase por enquanto)
+    if(typeof carregarBanners === 'function') carregarBanners().catch(console.error);
+    if(typeof carregarMenuCategorias === 'function') carregarMenuCategorias().catch(console.error);
 
     try {
-        const q = await getDocs(collection(db, "produtos"));
-        todosProdutos = []; 
-        q.forEach((doc) => { todosProdutos.push({id:doc.id, ...doc.data()}); });
+        const response = await fetch('http://127.0.0.1:3000/products');
+        todosProdutos = await response.json();
 
         if(todosProdutos.length === 0) {
             if(container) container.innerHTML = '<p style="text-align:center;">Nenhum produto cadastrado.</p>';
             return;
         }
 
-        // Limpeza de Favoritos Fantasmas
+        todosProdutos = todosProdutos.map(p => ({
+            ...p,
+            id: p.id,
+            preco: parseFloat(p.preco),
+            precoOriginal: p.preco_original ? parseFloat(p.preco_original) : 0,
+            imagens: p.imagens || [], 
+            estoque: parseInt(p.estoque)
+        }));
+
+        // Limpa favoritos fantasmas
         const idsExistentes = todosProdutos.map(p => p.id);
         const totalAntes = favoritos.length;
-        favoritos = favoritos.filter(id => idsExistentes.includes(id));
+        favoritos = favoritos.filter(id => idsExistentes.includes(parseInt(id)) || idsExistentes.includes(String(id)));
         
-        if(favoritos.length !== totalAntes) {
-            localStorage.setItem('lston_favoritos', JSON.stringify(favoritos));
-        }
+        if(favoritos.length !== totalAntes) localStorage.setItem('lston_favoritos', JSON.stringify(favoritos));
 
         if(container) exibirProdutos(todosProdutos);
-        atualizarFavoritosUI();
+        if(typeof atualizarFavoritosUI === 'function') atualizarFavoritosUI();
 
     } catch (e) { 
-        console.error("Erro fatal ao carregar loja:", e); 
-        if(container) container.innerHTML = '<p style="text-align:center; color:red;">Erro ao carregar produtos.</p>';
+        console.error("Erro loja:", e); 
+        if(container) container.innerHTML = '<p style="text-align:center; color:red;">Erro de conexão com o servidor.</p>';
     }
 }
 
-// --- NOVA FUNÇÃO: CONTADOR DE VISITAS ---
 async function contarVisita() {
-    // Verifica se já visitou nesta sessão para não contar F5 como nova visita
     if(sessionStorage.getItem('lston_visitou')) return;
-    
     try {
-        // Incrementa contador no Firebase (Cria o doc 'stats/geral' se não existir)
         const statsRef = doc(db, "stats", "geral");
         await setDoc(statsRef, { visitas: increment(1) }, { merge: true });
-        
         sessionStorage.setItem('lston_visitou', 'true');
-        console.log("Visita contabilizada.");
-    } catch(e) {
-        console.warn("Erro ao contar visita:", e);
-    }
+    } catch(e) { }
 }
 
-// --- MENU DINÂMICO ---
 async function carregarMenuCategorias() {
     const navMenu = document.getElementById('nav-menu');
     if(!navMenu) return;
-
     try {
         const q = await getDocs(collection(db, "categorias"));
         let cats = [];
         q.forEach(d => cats.push(d.data().nome));
         cats.sort();
-
         let html = `<a href="#" onclick="filtrarCategoria('Todas')" class="active-link">Início</a>`;
-        cats.forEach(cat => {
-            html += `<a href="#" onclick="filtrarCategoria('${cat}')">${cat}</a>`;
-        });
+        cats.forEach(cat => html += `<a href="#" onclick="filtrarCategoria('${cat}')">${cat}</a>`);
         navMenu.innerHTML = html;
-
-    } catch(e) {
-        navMenu.innerHTML = `<a href="#" onclick="filtrarCategoria('Todas')">Início</a>`;
-    }
+    } catch(e) { navMenu.innerHTML = `<a href="#" onclick="filtrarCategoria('Todas')">Início</a>`; }
 }
 
-// --- 7. BANNERS ---
 let slideIndex = 0;
 async function carregarBanners() { 
     const c = document.getElementById('slider');
@@ -160,7 +156,7 @@ async function carregarBanners() {
 }
 window.mudarSlide = (n) => { const s = document.querySelectorAll('.slide'); if(s.length > 0) { slideIndex = (slideIndex + n + s.length) % s.length; document.getElementById('slider').style.transform = `translateX(-${slideIndex * 100}%)`; } }
 
-// --- 8. UI DA LOJA (COM BADGES) ---
+// --- UI PRODUTOS ---
 function exibirProdutos(lista) {
     if(!container) return;
     container.innerHTML = ''; 
@@ -179,12 +175,10 @@ function exibirProdutos(lista) {
             const pct = Math.round(((prod.precoOriginal - prod.preco) / prod.precoOriginal) * 100);
             badgeHtml += `<span class="badge-off" style="position:absolute; top:10px; left:10px; background:#e74c3c; color:white; padding:4px 8px; border-radius:4px; font-size:11px; font-weight:bold; z-index:2;">-${pct}% OFF</span>`;
         }
-
         if(est > 0 && est < 5) {
              const topPos = badgeHtml ? '35px' : '10px';
              badgeHtml += `<span class="badge-stock" style="position:absolute; top:${topPos}; left:10px; background:#f39c12; color:white; padding:4px 8px; border-radius:4px; font-size:10px; font-weight:bold; z-index:2;">ÚLTIMAS UNIDADES</span>`;
         }
-
         const heartClass = favoritos.includes(prod.id) ? 'fas fa-heart fav-btn active' : 'far fa-heart fav-btn';
         
         card.innerHTML = `
@@ -207,15 +201,14 @@ function exibirProdutos(lista) {
     });
 }
 
-// --- 9. FAVORITOS ---
-window.toggleFavoritosModal = () => {
-    const m = document.getElementById('favoritos-modal');
-    if(m) { m.style.display = (m.style.display === 'flex') ? 'none' : 'flex'; if(m.style.display === 'flex') atualizarFavoritosUI(); }
-}
+// --- FAVORITOS ---
+window.toggleFavoritosModal = () => { const m = document.getElementById('favoritos-modal'); if(m) { m.style.display = (m.style.display === 'flex') ? 'none' : 'flex'; if(m.style.display === 'flex') atualizarFavoritosUI(); } }
 window.toggleFavorito = (id, el, e) => { 
     e.stopPropagation(); 
-    if(favoritos.includes(id)) { favoritos = favoritos.filter(f => f !== id); if(el) el.className = 'far fa-heart fav-btn'; window.showToast("Removido dos favoritos"); } 
-    else { favoritos.push(id); if(el) el.className = 'fas fa-heart fav-btn active'; window.showToast("Favoritado!"); } 
+    const idNum = parseInt(id) || id;
+    const exists = favoritos.some(f => f == id);
+    if(exists) { favoritos = favoritos.filter(f => f != id); if(el) el.className = 'far fa-heart fav-btn'; window.showToast("Removido dos favoritos"); } 
+    else { favoritos.push(idNum); if(el) el.className = 'fas fa-heart fav-btn active'; window.showToast("Favoritado!"); } 
     localStorage.setItem('lston_favoritos', JSON.stringify(favoritos));
     atualizarFavoritosUI();
 }
@@ -226,20 +219,20 @@ function atualizarFavoritosUI() {
     if(!lista) return;
     lista.innerHTML = '';
     if(favoritos.length === 0) { lista.innerHTML = '<p style="text-align:center; padding:20px; color:#999;">Sua lista de desejos está vazia.</p>'; return; }
-    const produtosFav = todosProdutos.filter(p => favoritos.includes(p.id));
+    const produtosFav = todosProdutos.filter(p => favoritos.some(f => f == p.id));
     produtosFav.forEach(item => {
         let img = (item.imagens && item.imagens.length > 0) ? item.imagens[0] : (item.img || '');
         lista.innerHTML += `<div class="cart-item"><div style="display:flex;align-items:center;"><img src="${img}" style="width:50px;height:50px;object-fit:cover;border-radius:4px;margin-right:10px;"><div class="item-info"><strong>${item.nome}</strong><br>${window.fmtMoney(item.preco)}</div></div><div style="display:flex; gap:10px; align-items:center;"><i class="fas fa-cart-plus" title="Mover para Carrinho" style="cursor:pointer; color:var(--green-color);" onclick="adicionarAoCarrinho(todosProdutos.find(p=>p.id=='${item.id}'))"></i><i class="fas fa-trash" title="Remover" style="cursor:pointer; color:var(--danger-color);" onclick="window.toggleFavorito('${item.id}', null, event); atualizarFavoritosUI(); if(window.carregarLoja) window.carregarLoja();"></i></div></div>`;
     });
 }
 
-// --- 10. CARRINHO & CHECKOUT ---
+// --- CARRINHO ---
 window.alterarQtdCard = (btn, delta) => { const input = btn.parentNode.querySelector('input'); let val = parseInt(input.value) + delta; if(val < 1) val = 1; input.value = val; }
-window.adicionarComQtd = (id, btnElement) => { const prod = todosProdutos.find(p => p.id === id); const card = btnElement.parentElement; const qtyInput = card.querySelector('.card-qty-input'); const qtd = parseInt(qtyInput.value); adicionarAoCarrinho(prod, qtd); }
+window.adicionarComQtd = (id, btnElement) => { const prod = todosProdutos.find(p => p.id == id); if(!prod) return; const card = btnElement.parentElement; const qtyInput = card.querySelector('.card-qty-input'); const qtd = parseInt(qtyInput.value); adicionarAoCarrinho(prod, qtd); }
 function adicionarAoCarrinho(produto, qtd = 1) {
     if(!produto) return;
     const estoqueDisponivel = parseInt(produto.estoque) || 0;
-    const itemExistente = carrinho.find(p => p.id === produto.id);
+    const itemExistente = carrinho.find(p => p.id == produto.id);
     const qtdNoCarrinho = itemExistente ? itemExistente.qtd : 0;
     if (qtdNoCarrinho + qtd > estoqueDisponivel) { window.showToast(`Estoque insuficiente!`, "error"); return; }
     let capa = (produto.imagens && produto.imagens.length > 0) ? produto.imagens[0] : (produto.img || '');
@@ -260,63 +253,34 @@ function atualizarCarrinhoUI() {
         lista.innerHTML += `<div class="cart-item"><div style="display:flex;align-items:center;"><img src="${item.img}"><div class="item-info"><strong>${item.nome}</strong><br>${window.fmtMoney(item.preco)}<div class="cart-qty-control"><button class="cart-qty-btn" onclick="alterarQtdCarrinho(${index}, -1)">-</button><span class="cart-qty-val">${item.qtd}</span><button class="cart-qty-btn" onclick="alterarQtdCarrinho(${index}, 1)">+</button></div></div></div><i class="fas fa-trash item-remove" onclick="window.removerDoCarrinho(${index})"></i></div>`;
     });
 
-    // Aplica desconto (se houver) e frete
     let total = subtotal - (subtotal * desconto); 
     total += freteValor;
-    
     let textoTotal = `Total: ${window.fmtMoney(total)}`;
     if(freteValor > 0) textoTotal += ` <br><small>(c/ frete)</small>`;
     if(desconto > 0) textoTotal += ` <br><small style="color:var(--green-color);">(-${desconto*100}% cupom)</small>`;
-
     if(document.getElementById('cart-total')) document.getElementById('cart-total').innerHTML = textoTotal;
 }
 window.alterarQtdCarrinho = (index, delta) => { const item = carrinho[index]; const estoque = parseInt(item.estoque) || 0; if (delta > 0 && item.qtd + delta > estoque) { window.showToast("Limite!", "error"); return; } item.qtd += delta; if(item.qtd < 1) carrinho.splice(index, 1); localStorage.setItem('lston_carrinho', JSON.stringify(carrinho)); atualizarCarrinhoUI(); }
 window.removerDoCarrinho = (index) => { carrinho.splice(index, 1); localStorage.setItem('lston_carrinho', JSON.stringify(carrinho)); atualizarCarrinhoUI(); }
 window.toggleCarrinho = () => { const m = document.getElementById('carrinho-modal'); if(m) { m.style.display = (m.style.display === 'flex') ? 'none' : 'flex'; atualizarCarrinhoUI(); } }
 
-// --- 11. BUSCA E FILTROS ---
-const campoBusca = document.getElementById('campo-busca'); 
-if (campoBusca) { 
-    campoBusca.addEventListener('input', (e) => { 
-        const termo = e.target.value.toLowerCase(); 
-        if (termo.length < 2) { exibirProdutos(todosProdutos); if(document.getElementById('titulo-secao')) document.getElementById('titulo-secao').innerText = "Destaques"; return; } 
-        const filtrados = todosProdutos.filter(p => { 
-            const nome = p.nome.toLowerCase(); const cat = (p.categoria || "").toLowerCase(); 
-            return nome.includes(termo) || cat.includes(termo);
-        }); 
-        if(document.getElementById('titulo-secao')) document.getElementById('titulo-secao').innerText = `Resultados: "${e.target.value}"`; 
-        exibirProdutos(filtrados); 
-    }); 
-}
-window.filtrarPorPreco = () => { const min = parseFloat(document.getElementById('price-min').value)||0; const max = parseFloat(document.getElementById('price-max').value)||Infinity; exibirProdutos(todosProdutos.filter(p => p.preco >= min && p.preco <= max)); }
-window.ordenarProdutos = () => { const t = document.getElementById('sort-select').value; let l = [...todosProdutos]; if(t==='menor') l.sort((a,b)=>a.preco-b.preco); if(t==='maior') l.sort((a,b)=>b.preco-a.preco); exibirProdutos(l); }
-
-// Filtro de Categoria
-window.filtrarCategoria = (cat) => { 
-    document.getElementById('titulo-secao').innerText = cat === 'Todas' ? 'Todos os Produtos' : cat; 
-    const links = document.querySelectorAll('.nav-menu a');
-    links.forEach(l => l.classList.remove('active-link'));
-    const clicked = Array.from(links).find(l => l.innerText === cat || (cat === 'Todas' && l.innerText === 'Início'));
-    if(clicked) clicked.classList.add('active-link');
-
-    exibirProdutos(cat==='Todas'?todosProdutos:todosProdutos.filter(p=>p.categoria===cat)); 
-}
-
-// --- 12. CHECKOUT E PEDIDO ---
 window.irParaCheckout = async () => { 
     document.getElementById('etapa-carrinho').style.display='none'; 
     document.getElementById('etapa-checkout').style.display='flex'; 
     if(currentUserId) {
         try {
-            const docRef = doc(db, "users", currentUserId);
-            const docSnap = await getDoc(docRef);
-            if (docSnap.exists()) {
-                const dados = docSnap.data();
-                if(dados.nome) document.getElementById('check-nome').value = dados.nome;
-                if(dados.telefone) { const tf = document.getElementById('check-tel'); tf.value = dados.telefone; window.mascaraTel(tf); }
-                if(dados.cep) document.getElementById('check-cep').value = dados.cep;
-                if(dados.endereco) document.getElementById('check-endereco').value = `${dados.endereco}, ${dados.numero || ''} - ${dados.bairro || ''}`;
-                if(dados.cidade) document.getElementById('check-cidade').value = dados.cidade;
+            const localUser = JSON.parse(localStorage.getItem('lston_user'));
+            if(localUser) {
+                 if(localUser.nome) document.getElementById('check-nome').value = localUser.nome;
+                 if(localUser.telefone) document.getElementById('check-tel').value = localUser.telefone;
+                 if(localUser.cep) document.getElementById('check-cep').value = localUser.cep;
+                 if(localUser.endereco) {
+                     let endCompleto = localUser.endereco;
+                     if(localUser.numero) endCompleto += `, ${localUser.numero}`;
+                     if(localUser.bairro) endCompleto += ` - ${localUser.bairro}`;
+                     document.getElementById('check-endereco').value = endCompleto;
+                 }
+                 if(localUser.cidade) document.getElementById('check-cidade').value = localUser.cidade;
             }
         } catch(e) {}
     }
@@ -356,57 +320,30 @@ window.calcularFreteCarrinho = async () => {
     } catch(e){ resultDiv.innerText = "Erro."; } finally { window.toggleLoading(false); }
 }
 
-// --- FUNÇÃO DE CUPOM REAL ---
+// --- CUPOM (Firebase por enquanto) ---
 window.aplicarCupom = async () => {
     const input = document.getElementById('cupom-input');
     const codigoDigitado = input.value.trim().toUpperCase();
-    
     if(!codigoDigitado) return window.showToast("Digite um código!", "error");
     window.toggleLoading(true);
-
     try {
         const q = query(collection(db, "cupons"), where("codigo", "==", codigoDigitado));
         const querySnapshot = await getDocs(q);
-
-        if (querySnapshot.empty) {
-            window.toggleLoading(false);
-            return window.showToast("Cupom inválido.", "error");
-        }
-
-        let cupomValido = null;
-        querySnapshot.forEach(doc => { cupomValido = doc.data(); });
-
+        if (querySnapshot.empty) { window.toggleLoading(false); return window.showToast("Cupom inválido.", "error"); }
+        let cupomValido = null; querySnapshot.forEach(doc => { cupomValido = doc.data(); });
         if(cupomValido.validade) {
-            const hoje = new Date();
-            const validade = new Date(cupomValido.validade);
-            // Corrige fuso adicionando horas para garantir comparação correta do dia
-            validade.setHours(23, 59, 59);
-            
-            if(hoje > validade) {
-                window.toggleLoading(false);
-                return window.showToast("Este cupom venceu!", "error");
-            }
+            const hoje = new Date(); const validade = new Date(cupomValido.validade); validade.setHours(23, 59, 59);
+            if(hoje > validade) { window.toggleLoading(false); return window.showToast("Este cupom venceu!", "error"); }
         }
-
         const percentual = parseFloat(cupomValido.desconto);
         if(percentual > 0) {
-            desconto = percentual / 100;
-            window.showToast(`Desconto de ${percentual}% aplicado!`, "success");
-            input.disabled = true;
-            input.style.borderColor = "green";
-            input.value += " (Aplicado)";
-            atualizarCarrinhoUI();
+            desconto = percentual / 100; window.showToast(`Desconto de ${percentual}% aplicado!`, "success");
+            input.disabled = true; input.style.borderColor = "green"; input.value += " (Aplicado)"; atualizarCarrinhoUI();
         }
-
-    } catch (e) {
-        console.error(e);
-        window.showToast("Erro ao validar cupom.", "error");
-    } finally {
-        window.toggleLoading(false);
-    }
+    } catch (e) { console.error(e); window.showToast("Erro ao validar cupom.", "error"); } finally { window.toggleLoading(false); }
 }
 
-// --- CONFIRMAÇÃO COM REDIRECIONAMENTO ---
+// --- CHECKOUT NOVO (VIA NODE.JS) ---
 window.confirmarPedido = async () => {
     const nome = document.getElementById('check-nome').value;
     const telefone = document.getElementById('check-tel').value;
@@ -416,58 +353,55 @@ window.confirmarPedido = async () => {
     const pagamento = document.getElementById('check-pagamento').value;
 
     if(!nome || !endereco || !telefone) return window.showToast("Preencha Nome, Endereço e Telefone!", "error");
-    const telLimpo = telefone.replace(/\D/g, '');
-    if (telLimpo.length < 10 || telLimpo.length > 11) return window.showToast("Telefone inválido!", "error");
     
     let subtotal = 0; carrinho.forEach(i => subtotal += parseFloat(i.preco) * i.qtd);
     const totalFinal = (subtotal - (subtotal * desconto)) + freteValor;
-    const resumoHtml = carrinho.map(i => `<li style="margin-bottom:5px;">${i.qtd}x ${i.nome} - <b>${window.fmtMoney(i.preco)}</b></li>`).join('');
     
-    // --- LINHA ADICIONADA PARA FECHAR O CARRINHO ---
     document.getElementById('carrinho-modal').style.display = 'none';
 
     const confirmacao = await Swal.fire({
         title: 'Confirmar Pedido?',
-        html: `<div style="text-align:left;font-size:14px;"><p><strong>Cliente:</strong> ${nome}</p><p><strong>Tel:</strong> ${telefone}</p><p><strong>End:</strong> ${endereco}</p><hr><ul style="list-style:none;padding:0;">${resumoHtml}</ul><hr><p style="text-align:right;">Total: <strong>${window.fmtMoney(totalFinal)}</strong></p></div>`,
+        text: `Total: ${window.fmtMoney(totalFinal)}`,
         icon: 'question',
         showCancelButton: true,
-        confirmButtonColor: '#8bc34a',
-        cancelButtonColor: '#d33',
         confirmButtonText: '✅ Confirmar'
     });
 
     if (!confirmacao.isConfirmed) return;
 
     window.toggleLoading(true);
+
     try {
-        for (const item of carrinho) { 
-            const prodSnap = await getDoc(doc(db, "produtos", item.id));
-            if (!prodSnap.exists()) throw new Error(`Produto removido: ${item.nome}`);
-            if (parseInt(prodSnap.data().estoque) < item.qtd) throw new Error(`Estoque insuficiente: ${item.nome}`);
-        }
-        
-        const docRef = await addDoc(collection(db, "pedidos"), { 
-            cliente: nome, telefone, endereco, cidade, cep, pagamento, itens: carrinho, 
-            total: totalFinal, frete: freteValor, descontoAplicado: desconto, data: new Date().toISOString(), 
-            status: "Recebido", userEmail: currentUserEmail 
+        // --- ENVIA PARA O SERVIDOR NODE.JS ---
+        const response = await fetch('http://127.0.0.1:3000/orders', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                user_id: currentUserId,
+                cliente_nome: nome,
+                total: totalFinal,
+                frete_valor: freteValor,
+                metodo_pagamento: pagamento,
+                endereco_entrega: { rua: endereco, cidade, cep, telefone },
+                itens: carrinho
+            })
         });
-        
-        for (const item of carrinho) { 
-            const ref = doc(db, "produtos", item.id);
-            const snap = await getDoc(ref);
-            const nv = (parseInt(snap.data().estoque) || 0) - item.qtd; 
-            await updateDoc(ref, { estoque: nv });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            carrinho=[]; 
+            localStorage.setItem('lston_carrinho', '[]'); 
+            atualizarCarrinhoUI(); 
+            window.location.href = `sucesso.html?id=${data.orderId}&method=${pagamento}`;
+        } else {
+            throw new Error(data.error || "Erro desconhecido.");
         }
-        
-        carrinho=[]; 
-        localStorage.setItem('lston_carrinho', '[]'); 
-        atualizarCarrinhoUI(); 
-        
-        window.location.href = `sucesso.html?id=${docRef.id}&method=${pagamento}`;
 
     } catch(e) { 
         window.toggleLoading(false);
-        Swal.fire('Erro', e.message || "Erro desconhecido.", 'error');
+        console.error(e);
+        Swal.fire('Erro', e.message, 'error');
     }
 }
 

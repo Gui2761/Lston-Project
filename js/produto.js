@@ -200,6 +200,7 @@ function renderizarLayoutNovo(prod) {
 
     container.innerHTML = `
         <div class="product-page-container">
+        
             <h1 class="prod-title-big">${prod.nome}</h1>
             <div class="product-layout">
                 <div class="gallery-wrapper"><div class="thumbnails-col">${thumbsHtml}</div><div class="main-image-box"><img id="main-img-display" src="${imagens[0]}" alt="${prod.nome}"></div></div>
